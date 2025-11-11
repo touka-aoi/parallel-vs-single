@@ -9,6 +9,7 @@ import (
 	"github.com/touka-aoi/paralle-vs-single/application/domain"
 	"github.com/touka-aoi/paralle-vs-single/application/repository/state"
 	"github.com/touka-aoi/paralle-vs-single/handler"
+	"github.com/touka-aoi/paralle-vs-single/utils"
 )
 
 var (
@@ -70,6 +71,6 @@ func (s *InteractionService) record(endpoint string, started time.Time) {
 	s.metrics.IncrementCounter(ctx, "requests."+endpoint, 1)
 }
 
-func (s *InteractionService) validate(payload Validator) error {
+func (s *InteractionService) validate(payload utils.Validator) error {
 	return payload.Validate()
 }
