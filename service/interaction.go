@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/touka-aoi/paralle-vs-single/application/domain"
-	"github.com/touka-aoi/paralle-vs-single/application/repository/state"
+	"github.com/touka-aoi/paralle-vs-single/domain"
 	"github.com/touka-aoi/paralle-vs-single/handler"
+	"github.com/touka-aoi/paralle-vs-single/repository/state"
 	"github.com/touka-aoi/paralle-vs-single/utils"
 )
 
@@ -34,7 +34,14 @@ func (s *InteractionService) Move(ctx context.Context, payload *handler.MovePayl
 	if err := s.validate(payload); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
 	}
-	return s.state.ApplyMove(ctx, payload.Command)
+	return s.state.ApplyMove(ctx, &state.Move{
+		RoomID: payload.RoomID,
+		MoveCommand: domain.MoveCommand{
+			UserID:       payload.Command.UserID,
+			NextPosition: payload.Command.NextPosition,
+			Facing:       payload.Command.Facing,
+		},
+	})
 }
 
 func (s *InteractionService) Buff(ctx context.Context, payload *handler.BuffPayload) (*domain.BuffResult, error) {
@@ -43,7 +50,14 @@ func (s *InteractionService) Buff(ctx context.Context, payload *handler.BuffPayl
 	if err := s.validate(payload); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
 	}
-	return s.state.ApplyBuff(ctx, payload.Command)
+	return s.state.ApplyBuff(ctx, &state.Buff{
+		RoomID: payload.RoomID,
+		BuffCommand: domain.BuffCommand{
+			UserID:    payload.Command.UserID,
+			TargetIDs: payload.Command.TargetIDs,
+			Buff:      payload.Command.Buff,
+		},
+	})
 }
 
 func (s *InteractionService) Attack(ctx context.Context, payload *handler.AttackPayload) (*domain.AttackResult, error) {
@@ -52,7 +66,14 @@ func (s *InteractionService) Attack(ctx context.Context, payload *handler.Attack
 	if err := s.validate(payload); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
 	}
-	return s.state.ApplyAttack(ctx, payload.Command)
+	return s.state.ApplyAttack(ctx, &state.Attack{
+		RoomID: payload.RoomID,
+		AttackCommand: domain.AttackCommand{
+			UserID:   payload.Command.UserID,
+			TargetID: payload.Command.TargetID,
+			Damage:   payload.Command.Damage,
+		},
+	})
 }
 
 func (s *InteractionService) Trade(ctx context.Context, payload *handler.TradePayload) (*domain.TradeResult, error) {
@@ -61,7 +82,16 @@ func (s *InteractionService) Trade(ctx context.Context, payload *handler.TradePa
 	if err := s.validate(payload); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
 	}
-	return s.state.ApplyTrade(ctx, payload.Command)
+	return s.state.ApplyTrade(ctx, &state.Trade{
+		RoomID: payload.RoomID,
+		TradeCommand: domain.TradeCommand{
+			UserID:               payload.Command.UserID,
+			PartnerID:            payload.Command.PartnerID,
+			Offer:                payload.Command.Offer,
+			Request:              payload.Command.Request,
+			RequiresConfirmation: payload.Command.RequiresConfirmation,
+		},
+	})
 }
 
 func (s *InteractionService) record(endpoint string, started time.Time) {
