@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/touka-aoi/paralle-vs-single/application/domain"
+	"github.com/touka-aoi/paralle-vs-single/domain"
 	"github.com/touka-aoi/paralle-vs-single/utils"
 )
 

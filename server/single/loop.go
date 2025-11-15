@@ -1,4 +1,4 @@
-package handler
+package single
 
 import (
 	"context"
@@ -20,7 +20,7 @@ type Config struct {
 	Logger    *log.Logger
 }
 
-// Loop delivers incoming requests to the provided handler on a single goroutine.
+// Loop delivers incoming requests to the provided single on a single goroutine.
 type Loop struct {
 	handler Handler
 	queue   chan interface{}
@@ -35,7 +35,7 @@ type Loop struct {
 // New creates a Loop with the supplied configuration.
 func New(cfg Config) (*Loop, error) {
 	if cfg.Handler == nil {
-		return nil, errors.New("loop: handler is required")
+		return nil, errors.New("loop: single is required")
 	}
 	queueSize := cfg.QueueSize
 	if queueSize <= 0 {
@@ -75,7 +75,7 @@ func (l *Loop) run(ctx context.Context) {
 				return
 			}
 			if err := l.handler.Handle(req); err != nil {
-				l.logger.Printf("loop: handler error: %v", err)
+				l.logger.Printf("loop: single error: %v", err)
 			}
 		}
 	}

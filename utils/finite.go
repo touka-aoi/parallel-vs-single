@@ -3,7 +3,7 @@ package utils
 import (
 	"math"
 
-	"github.com/touka-aoi/paralle-vs-single/application/domain"
+	"github.com/touka-aoi/paralle-vs-single/domain"
 )
 
 func FiniteVec(v domain.Vec2) bool {
