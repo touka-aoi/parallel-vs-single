@@ -8,6 +8,9 @@ import (
 	"github.com/touka-aoi/paralle-vs-single/utils"
 )
 
+type RoomID string
+type ClientID string
+
 type MovePayload struct {
 	Meta    domain.Meta
 	RoomID  string

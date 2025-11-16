@@ -11,57 +11,35 @@ import (
 
 type ConcurrentStore struct {
 	base *Store
-	clk  func() time.Time
 	mu   sync.RWMutex
 }
 
-func NewConcurrentStore(base *Store) *ConcurrentStore {
-	return &ConcurrentStore{
-		base: base,
-		clk:  time.Now,
-	}
-}
+func NewConcurrentStore() *ConcurrentStore {
 
-func (c *ConcurrentStore) WithClock(clock func() time.Time) *ConcurrentStore {
-	if clock != nil {
-		c.clk = clock
+	return &ConcurrentStore{
+		base: newStore(),
 	}
-	return c
 }
 
 func (c *ConcurrentStore) ApplyMove(ctx context.Context, cmd *state.Move) (*domain.MoveResult, error) {
 	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.base.applyMove(cmd, c.now())
-}
-
-func (c *ConcurrentStore) ApplyBuff(ctx context.Context, cmd *state.Buff) (*domain.BuffResult, error) {
-	_ = ctx
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.base.applyBuff(cmd, c.now())
+	return c.base.applyMove(cmd, time.Now())
 }
 
 func (c *ConcurrentStore) ApplyAttack(ctx context.Context, cmd *state.Attack) (*domain.AttackResult, error) {
 	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.base.applyAttack(cmd, c.now())
+	return c.base.applyAttack(cmd, time.Now())
 }
 
-func (c *ConcurrentStore) ApplyTrade(ctx context.Context, cmd *state.Trade) (*domain.TradeResult, error) {
+func (c *ConcurrentStore) RegisterPlayer(ctx context.Context, playerID string, roomID string) error {
 	_ = ctx
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.base.applyTrade(cmd, c.now())
-}
-
-func (c *ConcurrentStore) now() time.Time {
-	if c.clk == nil {
-		return time.Now()
-	}
-	return c.clk()
+	return c.base.registerPlayer(playerID, roomID)
 }
 
 var _ state.InteractionState = (*ConcurrentStore)(nil)

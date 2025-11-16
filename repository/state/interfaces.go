@@ -28,10 +28,9 @@ type Trade struct {
 }
 
 type InteractionState interface {
+	RegisterPlayer(ctx context.Context, playerID string, roomID string) error
 	ApplyMove(ctx context.Context, cmd *Move) (*domain.MoveResult, error)
-	ApplyBuff(ctx context.Context, cmd *Buff) (*domain.BuffResult, error)
 	ApplyAttack(ctx context.Context, cmd *Attack) (*domain.AttackResult, error)
-	ApplyTrade(ctx context.Context, cmd *Trade) (*domain.TradeResult, error)
 }
 
 type MetricsRecorder interface {

@@ -20,45 +20,13 @@ type Store struct {
 	roomStats map[string]*domain.RoomStats
 }
 
-func NewStore() *Store {
+func newStore() *Store {
 	store := &Store{
 		players:   make(map[string]*domain.PlayerSnapshot),
 		rooms:     make(map[string]*domain.RoomSnapshot),
 		roomStats: make(map[string]*domain.RoomStats),
 	}
 	return store
-}
-
-// NewStoreWithSnapshots は初期プレイヤー・ルーム情報を基に Store を構築する。
-func NewStoreWithSnapshots(players []domain.PlayerSnapshot, rooms []domain.RoomSnapshot) *Store {
-	store := NewStore()
-	store.LoadSnapshots(players, rooms)
-	return store
-}
-
-// LoadSnapshots は既存状態を破棄し、渡されたスナップショットで再初期化する。
-func (s *Store) LoadSnapshots(players []domain.PlayerSnapshot, rooms []domain.RoomSnapshot) {
-	s.players = make(map[string]*domain.PlayerSnapshot, len(players))
-	for i := range players {
-		p := players[i]
-		if p.PlayerID == "" {
-			continue
-		}
-		playerCopy := p
-		s.players[p.PlayerID] = &playerCopy
-	}
-
-	s.rooms = make(map[string]*domain.RoomSnapshot, len(rooms))
-	s.roomStats = make(map[string]*domain.RoomStats, len(rooms))
-	for i := range rooms {
-		r := rooms[i]
-		if r.RoomID == "" {
-			continue
-		}
-		roomCopy := r
-		s.rooms[r.RoomID] = &roomCopy
-		s.roomStats[r.RoomID] = s.computeRoomStats(&roomCopy)
-	}
 }
 
 func (s *Store) applyMove(cmd *state.Move, ts time.Time) (*domain.MoveResult, error) {
@@ -69,47 +37,6 @@ func (s *Store) applyMove(cmd *state.Move, ts time.Time) (*domain.MoveResult, er
 	player.Position = cmd.NextPosition
 	player.LastUpdated = ts
 	return &domain.MoveResult{Player: copyPlayer(player)}, nil
-}
-
-func (s *Store) applyBuff(cmd *state.Buff, ts time.Time) (*domain.BuffResult, error) {
-	room, err := s.getRoom(cmd.RoomID)
-	if err != nil {
-		return nil, err
-	}
-	stats, err := s.statsForRoom(room)
-	if err != nil {
-		return nil, err
-	}
-	targetIDs := cmd.TargetIDs
-	if len(targetIDs) == 0 {
-		targetIDs = room.MemberIDs
-	}
-
-	affected := make([]domain.PlayerSnapshot, 0, len(targetIDs))
-	for _, id := range targetIDs {
-		player, err := s.getPlayer(id)
-		if err != nil {
-			return nil, err
-		}
-		buff := domain.ActiveBuff{
-			Buff:      cmd.Buff,
-			ExpiresAt: ts.Add(cmd.Buff.Duration),
-		}
-		player.ActiveBuffs = append(player.ActiveBuffs, buff)
-		player.LastUpdated = ts
-		affected = append(affected, copyPlayer(player))
-	}
-
-	room.LastUpdated = ts
-	stats.ActiveBuffHistogram[cmd.Buff.BuffID] += len(affected)
-	stats.InteractionCount += len(affected)
-	stats.LastUpdated = ts
-
-	return &domain.BuffResult{
-		AffectedPlayers: affected,
-		Room:            copyRoom(room),
-		Stats:           copyRoomStats(stats),
-	}, nil
 }
 
 func (s *Store) applyAttack(cmd *state.Attack, ts time.Time) (*domain.AttackResult, error) {
@@ -151,54 +78,14 @@ func (s *Store) applyAttack(cmd *state.Attack, ts time.Time) (*domain.AttackResu
 	}, nil
 }
 
-func (s *Store) applyTrade(cmd *state.Trade, ts time.Time) (*domain.TradeResult, error) {
-	initiator, err := s.getPlayer(cmd.UserID)
-	if err != nil {
-		return nil, err
+func (s *Store) registerPlayer(playerID string, roomID string) error {
+	s.players[playerID] = &domain.PlayerSnapshot{
+		PlayerID: playerID,
 	}
-	partner, err := s.getPlayer(cmd.PartnerID)
-	if err != nil {
-		return nil, err
+	s.rooms[roomID] = &domain.RoomSnapshot{
+		RoomID: roomID,
 	}
-	room, err := s.getRoom(cmd.RoomID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := applyInventoryChanges(initiator, cmd.Offer, -1); err != nil {
-		return nil, err
-	}
-	if err := applyInventoryChanges(partner, cmd.Request, -1); err != nil {
-		return nil, err
-	}
-	if err := applyInventoryChanges(initiator, cmd.Request, +1); err != nil {
-		return nil, err
-	}
-	if err := applyInventoryChanges(partner, cmd.Offer, +1); err != nil {
-		return nil, err
-	}
-
-	initiator.LastUpdated = ts
-	partner.LastUpdated = ts
-
-	room.LastUpdated = ts
-	stats, err := s.statsForRoom(room)
-	if err != nil {
-		return nil, err
-	}
-	stats.InteractionCount++
-	stats.LastUpdated = ts
-
-	return &domain.TradeResult{
-		Initiator: copyPlayer(initiator),
-		Partner:   copyPlayer(partner),
-		Ledger: domain.TradeLedger{
-			Confirmed: true,
-			Initiator: copyPlayer(initiator),
-			Partner:   copyPlayer(partner),
-		},
-		Stats: copyRoomStats(stats),
-	}, nil
+	return nil
 }
 
 func (s *Store) getPlayer(id string) (*domain.PlayerSnapshot, error) {
@@ -290,54 +177,4 @@ func (s *Store) statsForRoom(room *domain.RoomSnapshot) (*domain.RoomStats, erro
 		return nil, fmt.Errorf("memory: stats not registered for room %s", room.RoomID)
 	}
 	return stats, nil
-}
-
-func applyInventoryChanges(player *domain.PlayerSnapshot, changes []domain.ItemChange, sign int) error {
-	if len(changes) == 0 {
-		return nil
-	}
-	current := make(map[string]int, len(player.Inventory))
-	order := make([]string, 0, len(player.Inventory))
-	for _, entry := range player.Inventory {
-		current[entry.ItemID] = entry.Quantity
-		order = append(order, entry.ItemID)
-	}
-
-	newIDs := make(map[string]struct{})
-	for _, change := range changes {
-		if change.QuantityDelta <= 0 {
-			return fmt.Errorf("invalid quantity delta for item=%s", change.ItemID)
-		}
-		qty, ok := current[change.ItemID]
-		if !ok {
-			if sign < 0 {
-				return fmt.Errorf("inventory missing: player=%s item=%s", player.PlayerID, change.ItemID)
-			}
-			current[change.ItemID] = change.QuantityDelta
-			if _, exists := newIDs[change.ItemID]; !exists {
-				order = append(order, change.ItemID)
-				newIDs[change.ItemID] = struct{}{}
-			}
-			continue
-		}
-		next := qty + sign*change.QuantityDelta
-		if next < 0 {
-			return fmt.Errorf("inventory underflow: player=%s item=%s", player.PlayerID, change.ItemID)
-		}
-		current[change.ItemID] = next
-	}
-
-	updated := make([]domain.InventoryEntry, 0, len(order))
-	for _, id := range order {
-		qty := current[id]
-		if qty <= 0 {
-			continue
-		}
-		updated = append(updated, domain.InventoryEntry{
-			ItemID:   id,
-			Quantity: qty,
-		})
-	}
-	player.Inventory = updated
-	return nil
 }

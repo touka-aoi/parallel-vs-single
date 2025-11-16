@@ -21,9 +21,9 @@ const (
 	scopeBroadcast = "broadcast"
 )
 
-type RoomID string
-type ClientID string
 type ClientSet map[*wsClient]struct{}
+
+const defaultRoomID handler.RoomID = "room-1"
 
 func (c ClientSet) Add(client *wsClient) {
 	c[client] = struct{}{}
@@ -34,18 +34,18 @@ func (c ClientSet) Remove(client *wsClient) {
 }
 
 type Handler struct {
-	svc     *service.InteractionService
+	svc     service.InteractionService
 	mu      sync.RWMutex
 	clients map[*wsClient]*clientInfo
-	rooms   map[RoomID]ClientSet
+	rooms   map[handler.RoomID]ClientSet
 }
 
 type clientInfo struct {
-	roomID string
+	roomID handler.RoomID
 }
 
 type wsClient struct {
-	id        ClientID
+	id        handler.ClientID
 	conn      *websocket.Conn
 	send      chan *outboundFrame
 	done      chan struct{}
@@ -60,14 +60,13 @@ func (c *wsClient) closeChannels() {
 }
 
 // NewHandler は依存するサービスを受け取り、WebSocket ハンドラを構築する。
-func NewHandler(svc *service.InteractionService) *Handler {
+func NewHandler(svc service.InteractionService) *Handler {
 	h := &Handler{
 		svc:     svc,
 		clients: make(map[*wsClient]*clientInfo),
-		rooms:   make(map[RoomID]ClientSet),
+		rooms:   make(map[handler.RoomID]ClientSet),
 	}
-	//NOTE: テスト用のためroom1を作成
-	h.rooms[RoomID("1")] = make(ClientSet)
+	h.rooms[defaultRoomID] = make(ClientSet)
 	return h
 }
 
@@ -79,7 +78,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &wsClient{
-		id:   ClientID(uuid.NewString()),
+		id:   handler.ClientID(uuid.NewString()),
 		conn: conn,
 		send: make(chan *outboundFrame, 512),
 		done: make(chan struct{}),
@@ -144,8 +143,8 @@ func (h *Handler) writeLoop(ctx context.Context, client *wsClient) {
 func (h *Handler) addClient(client *wsClient) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.clients[client] = &clientInfo{roomID: "1"}
-	h.rooms[RoomID("1")].Add(client)
+	h.clients[client] = &clientInfo{roomID: defaultRoomID}
+	h.rooms[defaultRoomID].Add(client)
 }
 
 func (h *Handler) removeClient(client *wsClient) {
@@ -159,9 +158,8 @@ func (h *Handler) removeClient(client *wsClient) {
 		h.mu.Unlock()
 		panic("client info not found")
 	}
-	h.rooms[RoomID(info.roomID)].Remove(client)
-	if len(h.rooms[RoomID(info.roomID)]) == 0 {
-		delete(h.rooms, RoomID(info.roomID))
+	if set, ok := h.rooms[handler.RoomID(info.roomID)]; ok {
+		set.Remove(client)
 	}
 	delete(h.clients, client)
 	h.mu.Unlock()
@@ -179,7 +177,11 @@ func (h *Handler) sendToClient(client *wsClient, frame *outboundFrame) {
 
 func (h *Handler) broadcast(roomID string, frame *outboundFrame, exclude *wsClient) {
 	h.mu.RLock()
-	members := h.rooms[RoomID(roomID)]
+	members, ok := h.rooms[handler.RoomID(roomID)]
+	if !ok {
+		h.mu.RUnlock()
+		return
+	}
 	targets := make([]*wsClient, 0, len(members))
 	for client := range members {
 		if client == exclude {
@@ -191,7 +193,7 @@ func (h *Handler) broadcast(roomID string, frame *outboundFrame, exclude *wsClie
 	for _, target := range targets {
 		select {
 		case <-target.done:
-			h.removeClient(target)
+			continue
 		default:
 			target.send <- frame
 		}
@@ -256,5 +258,5 @@ func (h *Handler) makeResponse(frameType, roomID string, result interface{}, err
 }
 
 func (h *Handler) removeRoomLocked(client *wsClient, roomID string) {
-	h.rooms[RoomID(roomID)].Remove(client)
+	h.rooms[handler.RoomID(roomID)].Remove(client)
 }

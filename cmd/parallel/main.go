@@ -13,7 +13,6 @@ import (
 
 	"github.com/touka-aoi/paralle-vs-single/domain"
 	parallelhandler "github.com/touka-aoi/paralle-vs-single/handler/parallel"
-	"github.com/touka-aoi/paralle-vs-single/repository/state"
 	"github.com/touka-aoi/paralle-vs-single/repository/state/memory"
 	"github.com/touka-aoi/paralle-vs-single/server/parallel"
 	"github.com/touka-aoi/paralle-vs-single/service"
@@ -28,15 +27,16 @@ func main() {
 	addr = utils.GetEnvDefault("ADDR", "localhost")
 	port := utils.GetEnvDefault("PORT", "9090")
 
-	stateRepository := buildState()
+	stateRepository := memory.NewConcurrentStore()
 	metrics := &noopMetrics{}
 	svc, err := service.NewInteractionService(stateRepository, metrics)
 	if err != nil {
 		log.Fatalf("failed to construct service: %v", err)
 	}
 
-	h := parallelhandler.NewHandler(svc)
-	s := parallel.NewServer(fmt.Sprintf("%s:%s", addr, port), h)
+	connectHandler := parallelhandler.NewConnectHandler(svc)
+	wsHandler := parallelhandler.NewHandler(svc)
+	s := parallel.NewServer(fmt.Sprintf("%s:%s", addr, port), wsHandler, connectHandler)
 	go func() {
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http single error: %v", err)
@@ -56,11 +56,6 @@ func main() {
 		}
 	}
 	slog.InfoContext(ctx, "server shutdown complete")
-}
-
-func buildState() state.InteractionState {
-	store := memory.NewStoreWithSnapshots(seedPlayers(), seedRooms())
-	return memory.NewConcurrentStore(store)
 }
 
 func seedPlayers() []domain.PlayerSnapshot {

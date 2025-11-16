@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/touka-aoi/paralle-vs-single/domain"
 	"github.com/touka-aoi/paralle-vs-single/handler"
 	"github.com/touka-aoi/paralle-vs-single/repository/state"
@@ -16,19 +17,25 @@ var (
 	ErrInvalidPayload = errors.New("service: invalid payload")
 )
 
-type InteractionService struct {
+type InteractionService interface {
+	Connect(ctx context.Context) (string, string, error)
+	Move(ctx context.Context, payload *handler.MovePayload) (*domain.MoveResult, error)
+	Attack(ctx context.Context, payload *handler.AttackPayload) (*domain.AttackResult, error)
+}
+
+type interactionService struct {
 	state   state.InteractionState
 	metrics state.MetricsRecorder
 }
 
-func NewInteractionService(state state.InteractionState, metics state.MetricsRecorder) (*InteractionService, error) {
-	return &InteractionService{
+func NewInteractionService(state state.InteractionState, metics state.MetricsRecorder) (InteractionService, error) {
+	return &interactionService{
 		state:   state,
 		metrics: metics,
 	}, nil
 }
 
-func (s *InteractionService) Move(ctx context.Context, payload *handler.MovePayload) (*domain.MoveResult, error) {
+func (s *interactionService) Move(ctx context.Context, payload *handler.MovePayload) (*domain.MoveResult, error) {
 	start := time.Now()
 	defer s.record("move", start)
 	if err := s.validate(payload); err != nil {
@@ -44,23 +51,7 @@ func (s *InteractionService) Move(ctx context.Context, payload *handler.MovePayl
 	})
 }
 
-func (s *InteractionService) Buff(ctx context.Context, payload *handler.BuffPayload) (*domain.BuffResult, error) {
-	start := time.Now()
-	defer s.record("buff", start)
-	if err := s.validate(payload); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
-	}
-	return s.state.ApplyBuff(ctx, &state.Buff{
-		RoomID: payload.RoomID,
-		BuffCommand: domain.BuffCommand{
-			UserID:    payload.Command.UserID,
-			TargetIDs: payload.Command.TargetIDs,
-			Buff:      payload.Command.Buff,
-		},
-	})
-}
-
-func (s *InteractionService) Attack(ctx context.Context, payload *handler.AttackPayload) (*domain.AttackResult, error) {
+func (s *interactionService) Attack(ctx context.Context, payload *handler.AttackPayload) (*domain.AttackResult, error) {
 	start := time.Now()
 	defer s.record("attack", start)
 	if err := s.validate(payload); err != nil {
@@ -76,31 +67,23 @@ func (s *InteractionService) Attack(ctx context.Context, payload *handler.Attack
 	})
 }
 
-func (s *InteractionService) Trade(ctx context.Context, payload *handler.TradePayload) (*domain.TradeResult, error) {
+func (s *interactionService) Connect(ctx context.Context) (string, string, error) {
+	_ = ctx
 	start := time.Now()
-	defer s.record("trade", start)
-	if err := s.validate(payload); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
-	}
-	return s.state.ApplyTrade(ctx, &state.Trade{
-		RoomID: payload.RoomID,
-		TradeCommand: domain.TradeCommand{
-			UserID:               payload.Command.UserID,
-			PartnerID:            payload.Command.PartnerID,
-			Offer:                payload.Command.Offer,
-			Request:              payload.Command.Request,
-			RequiresConfirmation: payload.Command.RequiresConfirmation,
-		},
-	})
+	defer s.record("connect", start)
+	playerID := uuid.NewString()
+	roomID := uuid.NewString()
+	_ = s.state.RegisterPlayer(ctx, playerID, roomID)
+	return playerID, roomID, nil
 }
 
-func (s *InteractionService) record(endpoint string, started time.Time) {
+func (s *interactionService) record(endpoint string, started time.Time) {
 	duration := time.Since(started)
 	ctx := context.Background()
 	s.metrics.RecordLatency(ctx, endpoint, duration)
 	s.metrics.IncrementCounter(ctx, "requests."+endpoint, 1)
 }
 
-func (s *InteractionService) validate(payload utils.Validator) error {
+func (s *interactionService) validate(payload utils.Validator) error {
 	return payload.Validate()
 }
