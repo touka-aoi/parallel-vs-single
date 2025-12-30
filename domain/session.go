@@ -7,9 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+type SessionID string
+
 // Session は1接続の論理的な接続状態を表す構造体です。
 type Session struct {
-	ID string
+	id SessionID
 
 	// activity
 	lastRead  atomic.Int64
@@ -20,13 +22,12 @@ type Session struct {
 	//sendQ *BoundedQueue[[]byte] // bounded ring buffer
 
 	// lifecycle
-	closed      atomic.Bool
-	closeReason atomic.Uint32
+	closed atomic.Bool
 }
 
 func NewSession() *Session {
 	s := &Session{
-		ID: uuid.NewString(),
+		id: SessionID(uuid.NewString()),
 	}
 	now := time.Now().UnixNano()
 	s.lastRead.Store(now)
@@ -47,9 +48,8 @@ func (s *Session) TouchPong() {
 	s.lastPong.Store(time.Now().UnixNano())
 }
 
-func (s *Session) Close(reason uint32) bool {
+func (s *Session) Close() bool {
 	if s.closed.CompareAndSwap(false, true) {
-		s.closeReason.Store(reason)
 		return true
 	}
 	return false
@@ -82,6 +82,10 @@ func (s *Session) IsWriteIdle(timeout time.Duration) bool {
 
 func (s *Session) IsPongIdle(timeout time.Duration) bool {
 	return isIdleSince(unixNanoToTime(s.lastPong.Load()), timeout)
+}
+
+func (s *Session) ID() SessionID {
+	return s.id
 }
 
 func (s *Session) IsClosed() bool {
