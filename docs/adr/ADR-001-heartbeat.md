@@ -50,4 +50,4 @@ Server層において接続してくる接続のタイムアウトをどう管�
   - 全体: スケール優先・リソース上限管理重視ならこちら。
 
 # References
-- [ADR-002: Per-Connection Owner Loop による接続管理設計](./ADR-002-per-connection-management.md) によって破棄
+- [ADR-002: Per-Connection Owner Loop による接続管理設計](ADR-002-per-connection-management.md) によって破棄
