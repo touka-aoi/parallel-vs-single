@@ -9,6 +9,10 @@ import (
 
 type SessionID string
 
+func (id SessionID) String() string {
+	return string(id)
+}
+
 // Session は1接続の論理的な接続状態を表す構造体です。
 type Session struct {
 	id SessionID

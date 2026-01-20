@@ -25,9 +25,11 @@ type SessionEndpoint struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	session    *Session
-	connection *Connection
-	dispatcher Dispatcher
+	session     *Session
+	connection  *Connection
+	pubsub      PubSub
+	roomManager RoomManager
+	roomID      RoomID // 実行時にRoomManagerから取得
 
 	ctrlCh  chan endpointEvent // 制御用チャネル
 	writeCh chan []byte        // 書き込み用チャネル
@@ -36,30 +38,52 @@ type SessionEndpoint struct {
 	closed atomic.Bool
 }
 
-func NewSessionEndpoint(session *Session, connection *Connection, dispatcher Dispatcher) (*SessionEndpoint, error) {
+func NewSessionEndpoint(session *Session, connection *Connection, pubsub PubSub, roomManager RoomManager) (*SessionEndpoint, error) {
 	if session == nil {
 		return nil, ErrInitializationFailed
 	}
 	if connection == nil {
 		return nil, ErrInitializationFailed
 	}
-	if dispatcher == nil {
+	if pubsub == nil {
+		return nil, ErrInitializationFailed
+	}
+	if roomManager == nil {
 		return nil, ErrInitializationFailed
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	se := &SessionEndpoint{
-		ctx:        ctx,
-		cancel:     cancel,
-		session:    session,
-		connection: connection,
-		dispatcher: dispatcher,
-		ctrlCh:     make(chan endpointEvent, 16),
-		writeCh:    make(chan []byte, 1024),
+		ctx:         ctx,
+		cancel:      cancel,
+		session:     session,
+		connection:  connection,
+		pubsub:      pubsub,
+		roomManager: roomManager,
+		ctrlCh:      make(chan endpointEvent, 16),
+		writeCh:     make(chan []byte, 1024),
 	}
 	return se, nil
 }
 
 func (se *SessionEndpoint) Run() error {
+	// RoomManagerにルームを問い合わせ
+	roomID, err := se.roomManager.GetRoom(se.ctx, se.session.ID())
+	if err != nil {
+		return err
+	}
+	se.roomID = roomID
+
+	// 自分宛のメッセージを購読
+	sessionTopic := Topic("session:" + se.session.ID().String())
+	msgCh := se.pubsub.Subscribe(sessionTopic)
+	defer se.pubsub.Unsubscribe(sessionTopic, msgCh)
+
+	// room側にセッション追加を通知
+	ctrlTopic := Topic("room:" + string(se.roomID) + ":ctrl")
+	//TODO: []byte("join")をroomMessageからシリアライズするようにする
+	se.pubsub.Publish(se.ctx, ctrlTopic, Message{SessionID: se.session.ID(), Data: []byte("join")})
+	defer se.pubsub.Publish(se.ctx, ctrlTopic, Message{SessionID: se.session.ID(), Data: []byte("leave")})
+
 	eg, ctx := errgroup.WithContext(se.ctx)
 	eg.Go(func() error {
 		se.ownerLoop(ctx)
@@ -71,6 +95,10 @@ func (se *SessionEndpoint) Run() error {
 	})
 	eg.Go(func() error {
 		se.writeLoop(ctx)
+		return nil
+	})
+	eg.Go(func() error {
+		se.subscribeLoop(ctx, msgCh)
 		return nil
 	})
 	if err := eg.Wait(); err != nil {
@@ -119,6 +147,7 @@ func (se *SessionEndpoint) ownerLoop(ctx context.Context) {
 }
 
 func (se *SessionEndpoint) readLoop(ctx context.Context) {
+	roomTopic := Topic("room:" + string(se.roomID))
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,10 +159,11 @@ func (se *SessionEndpoint) readLoop(ctx context.Context) {
 				continue
 			}
 			se.session.TouchRead()
-			err = se.dispatcher.Dispatch(ctx, data)
-			if err != nil {
-				se.sendCtrlEvent(ctx, endpointEvent{kind: evDispatchError, err: err})
-			}
+			// roomにpublish（sessionIDを含める）
+			se.pubsub.Publish(ctx, roomTopic, Message{
+				SessionID: se.session.ID(),
+				Data:      data,
+			})
 		}
 	}
 }
@@ -154,6 +184,26 @@ func (se *SessionEndpoint) writeLoop(ctx context.Context) {
 	}
 }
 
+// subscribeLoop はpubsubからのメッセージをwriteChに転送します。
+func (se *SessionEndpoint) subscribeLoop(ctx context.Context, msgCh <-chan Message) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-msgCh:
+			if !ok {
+				return
+			}
+			select {
+			case se.writeCh <- msg.Data:
+				// 送信成功
+			default:
+				slog.Warn("subscribeLoop: writeCh full, message dropped", "sessionID", se.session.ID())
+			}
+		}
+	}
+}
+
 func (se *SessionEndpoint) close() {
 	if !se.closed.CompareAndSwap(false, true) {
 		return
@@ -161,7 +211,6 @@ func (se *SessionEndpoint) close() {
 	se.cancel()
 	se.session.Close()
 	se.connection.Close()
-	_ = se.dispatcher.Dispatch(se.ctx, nil)
 }
 
 // handleControlEvent は制御チャネルからのイベントを処理し論理セッションの状態を更新する唯一の関数です。

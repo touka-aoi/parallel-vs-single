@@ -23,8 +23,22 @@ func main() {
 	addr := utils.GetEnvDefault("ADDR", "localhost")
 	port := utils.GetEnvDefault("PORT", "9090")
 
-	dispatcher := domain.NewLoopbackDispatcher()
-	handler := server.Route(dispatcher)
+	// PubSub初期化
+	pubsub := domain.NewSimplePubSub()
+
+	// デフォルトルーム設定
+	defaultRoomID := domain.RoomID("default")
+	roomManager := domain.NewSimpleRoomManager(defaultRoomID)
+
+	// Roomを作成して起動（Applicationはnil、後で実装）
+	room := domain.NewRoom(defaultRoomID, pubsub, nil)
+	go func() {
+		if err := room.Run(ctx); err != nil {
+			slog.ErrorContext(ctx, "room error", "err", err)
+		}
+	}()
+
+	handler := server.Route(pubsub, roomManager)
 	s := server.NewServer(fmt.Sprintf("%s:%s", addr, port), handler)
 
 	go func() {

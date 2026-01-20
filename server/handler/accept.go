@@ -10,11 +10,12 @@ import (
 )
 
 type AcceptHandler struct {
-	dispatcher domain.Dispatcher
+	pubsub      domain.PubSub
+	roomManager domain.RoomManager
 }
 
-func NewAcceptHandler(dispatcher domain.Dispatcher) *AcceptHandler {
-	return &AcceptHandler{dispatcher: dispatcher}
+func NewAcceptHandler(pubsub domain.PubSub, roomManager domain.RoomManager) *AcceptHandler {
+	return &AcceptHandler{pubsub: pubsub, roomManager: roomManager}
 }
 
 func (h *AcceptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +28,7 @@ func (h *AcceptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	transport := adapterwebsocker.NewTransportFrom(conn)
 	connection := domain.NewConnection(transport)
 	session := domain.NewSession()
-	endpoint, err := domain.NewSessionEndpoint(session, connection, h.dispatcher)
+	endpoint, err := domain.NewSessionEndpoint(session, connection, h.pubsub, h.roomManager)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to create session endpoint", "err", err)
 		return

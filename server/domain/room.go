@@ -15,73 +15,35 @@ type Room struct {
 	ID       RoomID
 	sessions map[SessionID]struct{}
 
-	dispatcher  Dispatcher
+	pubsub      PubSub
 	application Application // 外部からアプリケーションロジックを注入できる
 
-	ctrlCh    chan roomCtrl
-	receiveCh chan []byte
-	sendCh    chan roomSend
+	sendCh chan roomSend
 
 	tickInterval time.Duration
 }
 
-func NewRoom(id RoomID) *Room {
+func NewRoom(id RoomID, pubsub PubSub, application Application) *Room {
 	return &Room{
 		ID:           id,
 		sessions:     make(map[SessionID]struct{}),
-		ctrlCh:       make(chan roomCtrl, 1024),
-		receiveCh:    make(chan []byte, 1024),
+		pubsub:       pubsub,
+		application:  application,
 		sendCh:       make(chan roomSend, 1024),
 		tickInterval: time.Second / 60,
 	}
 }
 
-func (r *Room) Receive(ctx context.Context, data []byte) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case r.receiveCh <- data:
-		return nil
-	default:
-		return ErrRoomBusy
-	}
-}
-
-// AddRoom はルームに接続を追加します。チャネルが満杯の場合、ErrRoomBusy を返します。
-func (r *Room) AddRoom(ctx context.Context, sessionID SessionID) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case r.ctrlCh <- roomCtrl{kind: roomCtrlAdd, sessionID: sessionID}:
-		return nil
-	default:
-		return ErrRoomBusy
-	}
-}
-
-// RemoveRoom はルームから接続を削除します。チャネルが満杯の場合、ErrRoomBusy を返します。
-func (r *Room) RemoveRoom(ctx context.Context, sessionID SessionID) error {
-	select {
-	case <-ctx.Done():
-		return nil
-	case r.ctrlCh <- roomCtrl{kind: roomCtrlRemove, sessionID: sessionID}:
-		return nil
-	default:
-		return ErrRoomBusy
-	}
-}
-
-func (r *Room) Broadcast(ctx context.Context, data []byte) error {
+func (r *Room) Broadcast(ctx context.Context, data []byte) {
 	for sessionID := range r.sessions {
-		if err := r.dispatcher.Dispatch(ctx, sessionID, data); err != nil {
-			return err
-		}
+		topic := Topic("session:" + sessionID.String())
+		r.pubsub.Publish(ctx, topic, Message{Data: data})
 	}
-	return nil
 }
 
-func (r *Room) SendTo(ctx context.Context, sessionID SessionID, data []byte) error {
-	return r.dispatcher.Dispatch(ctx, sessionID, data)
+func (r *Room) SendTo(ctx context.Context, sessionID SessionID, data []byte) {
+	topic := Topic("session:" + sessionID.String())
+	r.pubsub.Publish(ctx, topic, Message{Data: data})
 }
 
 func (r *Room) EnqueueBroadcast(ctx context.Context, data []byte) error {
@@ -104,33 +66,49 @@ func (r *Room) enqueueSend(ctx context.Context, msg roomSend) error {
 }
 
 func (r *Room) Run(ctx context.Context) error {
+	// room宛のメッセージを購読
+	roomTopic := Topic("room:" + string(r.ID))
+	msgCh := r.pubsub.Subscribe(roomTopic)
+	defer r.pubsub.Unsubscribe(roomTopic, msgCh)
+
+	// room制御用トピックを購読（join/leave）
+	ctrlTopic := Topic("room:" + string(r.ID) + ":ctrl")
+	ctrlCh := r.pubsub.Subscribe(ctrlTopic)
+	defer r.pubsub.Unsubscribe(ctrlTopic, ctrlCh)
+
 	ticker := time.NewTicker(r.tickInterval)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
+			// 制御メッセージを処理（join/leave）
 		CTRL_LOOP:
 			for {
 				select {
-				case ctrl := <-r.ctrlCh:
+				case ctrl := <-ctrlCh:
 					r.handleControlMessage(ctrl)
 				default:
 					break CTRL_LOOP
 				}
 			}
+			// 受信メッセージを処理
 		RECEIVE_LOOP:
 			for {
 				select {
-				case data := <-r.receiveCh:
+				case msg := <-msgCh:
 					// アプリケーションロジックが担当する
-					parseData, err := r.application.Parse(ctx, data)
+					parseData, err := r.application.Parse(ctx, msg.Data)
 					if err != nil {
 						// どうするのこれ？ なんでルームでパースしてるかは意味わからんすぎるな
+						slog.WarnContext(ctx, "room parse failed", "err", err)
+						continue
 					}
 					if err := r.application.Handle(ctx, parseData); err != nil {
 						// どうするのこれ？
+						slog.WarnContext(ctx, "room handle failed", "err", err)
 					}
 				default:
 					break RECEIVE_LOOP
@@ -150,12 +128,14 @@ func (r *Room) Run(ctx context.Context) error {
 	}
 }
 
-func (r *Room) handleControlMessage(ctrl roomCtrl) {
-	switch ctrl.kind {
-	case roomCtrlAdd:
-		r.sessions[ctrl.sessionID] = struct{}{}
-	case roomCtrlRemove:
-		delete(r.sessions, ctrl.sessionID)
+// handleControlMessage はjoin/leave制御メッセージを処理します。
+// TODO: []byte("join"/"leave")をRoomMessage型に置き換え
+func (r *Room) handleControlMessage(msg Message) {
+	switch string(msg.Data) {
+	case "join":
+		r.sessions[msg.SessionID] = struct{}{}
+	case "leave":
+		delete(r.sessions, msg.SessionID)
 	default:
 	}
 }
@@ -163,13 +143,9 @@ func (r *Room) handleControlMessage(ctrl roomCtrl) {
 func (r *Room) handleSendMessage(ctx context.Context, msg roomSend) {
 	switch msg.kind {
 	case roomSendBroadcast:
-		if err := r.Broadcast(ctx, msg.data); err != nil {
-			slog.WarnContext(ctx, "room broadcast failed", "err", err)
-		}
+		r.Broadcast(ctx, msg.data)
 	case roomSendTo:
-		if err := r.SendTo(ctx, msg.sessionID, msg.data); err != nil {
-			slog.WarnContext(ctx, "room send failed", "err", err, "session_id", msg.sessionID)
-		}
+		r.SendTo(ctx, msg.sessionID, msg.data)
 	default:
 	}
 }

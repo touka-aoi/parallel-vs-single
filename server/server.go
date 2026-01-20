@@ -8,8 +8,7 @@ import (
 )
 
 type Server struct {
-	HTTP       *http.Server
-	dispatcher domain.Dispatcher
+	HTTP *http.Server
 }
 
 func NewServer(addr string, handler http.Handler) domain.Server {

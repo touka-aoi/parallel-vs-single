@@ -7,8 +7,8 @@ import (
 	"github.com/touka-aoi/paralle-vs-single/server/handler"
 )
 
-func Route(dispatcher domain.Dispatcher) *http.ServeMux {
+func Route(pubsub domain.PubSub, roomManager domain.RoomManager) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/ws", handler.NewAcceptHandler(dispatcher))
+	mux.Handle("/ws", handler.NewAcceptHandler(pubsub, roomManager))
 	return mux
 }

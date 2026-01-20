@@ -16,9 +16,10 @@ func TestNewSessionEndpoint_InitializesDefaults(t *testing.T) {
 	s := domain.NewSession()
 	tr := mocks.NewMockTransport(ctrl)
 	c := domain.NewConnection(tr)
-	d := mocks.NewMockDispatcher(ctrl)
+	ps := mocks.NewMockPubSub(ctrl)
+	rm := mocks.NewMockRoomManager(ctrl)
 
-	se, err := domain.NewSessionEndpoint(s, c, d)
+	se, err := domain.NewSessionEndpoint(s, c, ps, rm)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
