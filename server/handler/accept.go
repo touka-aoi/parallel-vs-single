@@ -33,7 +33,7 @@ func (h *AcceptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "failed to create session endpoint", "err", err)
 		return
 	}
-	slog.DebugContext(ctx, "accepted new connection", "session_id", session.ID)
+	slog.DebugContext(ctx, "accepted new connection", "session_id", session.ID())
 	err = endpoint.Run()
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to run session endpoint", "err", err)

@@ -15,7 +15,7 @@ func TestNewSessionEndpoint_InitializesDefaults(t *testing.T) {
 
 	s := domain.NewSession()
 	tr := mocks.NewMockTransport(ctrl)
-	c := domain.NewConnection(tr)
+	c := domain.NewConnection(s.ID(), tr)
 	ps := mocks.NewMockPubSub(ctrl)
 	rm := mocks.NewMockRoomManager(ctrl)
 

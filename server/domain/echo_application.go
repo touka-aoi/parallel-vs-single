@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
 
 // EchoApplication は受信したメッセージをそのままブロードキャストするテスト用Application。
 type EchoApplication struct {
@@ -26,5 +29,6 @@ func (e *EchoApplication) Tick(ctx context.Context) interface{} {
 	}
 	data := e.pendingData
 	e.pendingData = nil
+	slog.DebugContext(ctx, "EchoApplication Tick", "data", string(data))
 	return data
 }

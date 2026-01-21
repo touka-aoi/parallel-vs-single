@@ -158,6 +158,7 @@ func (se *SessionEndpoint) readLoop(ctx context.Context) {
 				se.sendCtrlEvent(ctx, endpointEvent{kind: evReadError, err: err})
 				continue
 			}
+			slog.DebugContext(ctx, "readLoop: received data", "sessionID", se.session.ID(), "data", string(data))
 			se.session.TouchRead()
 			// roomにpublish（sessionIDを含める）
 			se.pubsub.Publish(ctx, roomTopic, Message{
@@ -174,6 +175,7 @@ func (se *SessionEndpoint) writeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case data := <-se.writeCh:
+			slog.DebugContext(ctx, "writeLoop: received data", "sessionID", se.session.ID(), "data", string(data))
 			err := se.connection.Write(ctx, data)
 			if err != nil {
 				se.sendCtrlEvent(ctx, endpointEvent{kind: evWriteError, err: err})
