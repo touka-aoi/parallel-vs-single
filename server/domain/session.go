@@ -1,16 +1,17 @@
 package domain
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-type SessionID string
+type SessionID uint64
+
+var sessionIDCounter atomic.Uint64
 
 func (id SessionID) String() string {
-	return string(id)
+	return fmt.Sprintf("%d", id)
 }
 
 // Session は1接続の論理的な接続状態を表す構造体です。
@@ -31,7 +32,7 @@ type Session struct {
 
 func NewSession() *Session {
 	s := &Session{
-		id: SessionID(uuid.NewString()),
+		id: SessionID(sessionIDCounter.Add(1)),
 	}
 	now := time.Now().UnixNano()
 	s.lastRead.Store(now)

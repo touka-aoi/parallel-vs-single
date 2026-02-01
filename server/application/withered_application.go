@@ -2,13 +2,29 @@ package application
 
 import (
 	"context"
+	"encoding/binary"
 	"log/slog"
+	"math"
 
 	"withered/server/domain"
 )
 
+var byteOrder = binary.LittleEndian
+
+// キーマスク定数
+const (
+	KeyW uint32 = 0x01 // 上
+	KeyA uint32 = 0x02 // 左
+	KeyS uint32 = 0x04 // 下
+	KeyD uint32 = 0x08 // 右
+)
+
+// プレイヤー移動速度
+const PlayerSpeed float32 = 1.0
+
 // WitheredApplication は各メッセージタイプを処理するApplication
 type WitheredApplication struct {
+	field         *Field
 	pendingInputs []InputEvent
 }
 
@@ -20,7 +36,12 @@ type InputEvent struct {
 }
 
 func NewWitheredApplication() *WitheredApplication {
+	// マップ設定（ハードコーディング）
+	gameMap := NewMap(100, 100, 1.0) // 100x100タイル、タイルサイズ1.0
+	field := NewField(gameMap)
+
 	return &WitheredApplication{
+		field:         field,
 		pendingInputs: make([]InputEvent, 0),
 	}
 }
@@ -68,6 +89,12 @@ func (app *WitheredApplication) handleInput(ctx context.Context, sessionID domai
 		"keyMask", input.KeyMask,
 	)
 
+	// キーマスクから移動方向を計算
+	dx, dy := keyMaskToDirection(input.KeyMask)
+	if dx != 0 || dy != 0 {
+		app.field.ActorMove(ctx, sessionID, dx*PlayerSpeed, dy*PlayerSpeed)
+	}
+
 	app.pendingInputs = append(app.pendingInputs, InputEvent{
 		SessionID: sessionID,
 		Header:    header,
@@ -75,6 +102,23 @@ func (app *WitheredApplication) handleInput(ctx context.Context, sessionID domai
 	})
 
 	return nil
+}
+
+// keyMaskToDirection はキーマスクからX,Y方向を計算します。
+func keyMaskToDirection(keyMask uint32) (dx, dy float32) {
+	if keyMask&KeyW != 0 {
+		dy -= 1
+	}
+	if keyMask&KeyS != 0 {
+		dy += 1
+	}
+	if keyMask&KeyA != 0 {
+		dx -= 1
+	}
+	if keyMask&KeyD != 0 {
+		dx += 1
+	}
+	return dx, dy
 }
 
 func (app *WitheredApplication) handleActor(ctx context.Context, sessionID domain.SessionID, header *domain.Header, subType uint8, data []byte) error {
@@ -124,8 +168,13 @@ func (app *WitheredApplication) handleVoice(ctx context.Context, sessionID domai
 func (app *WitheredApplication) handleControl(ctx context.Context, sessionID domain.SessionID, header *domain.Header, subType uint8, data []byte) error {
 	switch domain.ControlSubType(subType) {
 	case domain.ControlSubTypeJoin:
-		slog.DebugContext(ctx, "handleControl:join", "sessionID", sessionID)
+		actor := app.field.SpawnAtCenter(sessionID)
+		slog.DebugContext(ctx, "handleControl:join",
+			"sessionID", sessionID,
+			"position", actor.Position,
+		)
 	case domain.ControlSubTypeLeave:
+		app.field.Remove(sessionID)
 		slog.DebugContext(ctx, "handleControl:leave", "sessionID", sessionID)
 	case domain.ControlSubTypeKick:
 		slog.DebugContext(ctx, "handleControl:kick", "sessionID", sessionID)
@@ -143,11 +192,36 @@ func (app *WitheredApplication) handleControl(ctx context.Context, sessionID dom
 }
 
 func (app *WitheredApplication) Tick(ctx context.Context) interface{} {
-	if len(app.pendingInputs) == 0 {
+	// 入力をクリア
+	app.pendingInputs = app.pendingInputs[:0]
+
+	// 全アクターの位置をエンコードして返す
+	actors := app.field.GetAllActors()
+	if len(actors) == 0 {
 		return nil
 	}
 
-	app.pendingInputs = app.pendingInputs[:0]
+	return encodeActorPositions(actors)
+}
 
-	return nil
+// encodeActorPositions は全アクターの位置をバイナリにエンコードします。
+// フォーマット: [ActorCount(u16)] + [Actor1] + [Actor2] + ...
+// Actor: [SessionID(u64)] + [X(f32)] + [Y(f32)] = 16 bytes/actor
+func encodeActorPositions(actors []*Actor) []byte {
+	const actorSize = 16 // u64 + f32 + f32
+	buf := make([]byte, 2+len(actors)*actorSize)
+
+	// ActorCount (u16)
+	byteOrder.PutUint16(buf[0:2], uint16(len(actors)))
+
+	// 各アクター
+	offset := 2
+	for _, actor := range actors {
+		byteOrder.PutUint64(buf[offset:offset+8], uint64(actor.SessionID))
+		byteOrder.PutUint32(buf[offset+8:offset+12], math.Float32bits(actor.Position.X))
+		byteOrder.PutUint32(buf[offset+12:offset+16], math.Float32bits(actor.Position.Y))
+		offset += actorSize
+	}
+
+	return buf
 }

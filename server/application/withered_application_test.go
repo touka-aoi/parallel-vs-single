@@ -10,7 +10,7 @@ import (
 func TestWitheredApplication_HandleMessage_Input(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID("test-session")
+	sessionID := domain.SessionID(1)
 
 	// Inputメッセージを作成
 	header := &domain.Header{
@@ -40,7 +40,7 @@ func TestWitheredApplication_HandleMessage_Input(t *testing.T) {
 func TestWitheredApplication_HandleMessage_ActorSpawn(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID("test-session")
+	sessionID := domain.SessionID(1)
 
 	header := &domain.Header{
 		Version:   1,
@@ -69,7 +69,7 @@ func TestWitheredApplication_HandleMessage_ActorSpawn(t *testing.T) {
 func TestWitheredApplication_HandleMessage_Control(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID("test-session")
+	sessionID := domain.SessionID(1)
 
 	header := &domain.Header{
 		Version:   1,
@@ -94,7 +94,7 @@ func TestWitheredApplication_HandleMessage_Control(t *testing.T) {
 func TestWitheredApplication_HandleMessage_InvalidHeader(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID("test-session")
+	sessionID := domain.SessionID(1)
 
 	// 短すぎるデータ
 	data := []byte{0x01, 0x02}

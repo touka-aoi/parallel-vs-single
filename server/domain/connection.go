@@ -1,8 +1,13 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
-type ConnectionID string
+type ConnectionID uint64
+
+var connectionIDCounter atomic.Uint64
 
 // Connection は物理的な接続を表します。
 type Connection struct {
@@ -14,7 +19,7 @@ type Connection struct {
 func NewConnection(sessionID SessionID, transport Transport) *Connection {
 	return &Connection{
 		SessionID:    sessionID,
-		ConnectionID: ConnectionID(sessionID),
+		ConnectionID: ConnectionID(connectionIDCounter.Add(1)),
 		transport:    transport,
 	}
 }
