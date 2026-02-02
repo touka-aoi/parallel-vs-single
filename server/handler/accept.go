@@ -20,7 +20,9 @@ func NewAcceptHandler(pubsub domain.PubSub, roomManager domain.RoomManager) *Acc
 
 func (h *AcceptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true, // 開発用: Origin チェックをスキップ
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to accept", "err", err)
 		return
