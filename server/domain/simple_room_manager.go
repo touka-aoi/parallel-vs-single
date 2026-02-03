@@ -18,3 +18,11 @@ func NewSimpleRoomManager(defaultRoomID RoomID) *SimpleRoomManager {
 func (m *SimpleRoomManager) GetRoom(ctx context.Context, sessionID SessionID) (RoomID, error) {
 	return m.defaultRoomID, nil
 }
+
+func (m *SimpleRoomManager) JoinRoom(ctx context.Context, roomID RoomID, sessionID SessionID) error {
+	return nil
+}
+
+func (m *SimpleRoomManager) LeaveRoom(ctx context.Context, roomID RoomID, sessionID SessionID) error {
+	return nil
+}

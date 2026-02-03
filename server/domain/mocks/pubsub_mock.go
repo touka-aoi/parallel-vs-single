@@ -12,8 +12,8 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
-
 	domain "withered/server/domain"
+
 	gomock "go.uber.org/mock/gomock"
 )
 

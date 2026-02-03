@@ -9,4 +9,6 @@ import "context"
 type RoomManager interface {
 	// GetRoom はセッションに割り当てるルームIDを返します。
 	GetRoom(ctx context.Context, sessionID SessionID) (RoomID, error)
+	JoinRoom(ctx context.Context, roomID RoomID, sessionID SessionID) error
+	LeaveRoom(ctx context.Context, roomID RoomID, sessionID SessionID) error
 }

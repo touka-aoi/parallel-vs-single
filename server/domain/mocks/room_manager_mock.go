@@ -12,8 +12,8 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
-
 	domain "withered/server/domain"
+
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -54,4 +54,32 @@ func (m *MockRoomManager) GetRoom(ctx context.Context, sessionID domain.SessionI
 func (mr *MockRoomManagerMockRecorder) GetRoom(ctx, sessionID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRoom", reflect.TypeOf((*MockRoomManager)(nil).GetRoom), ctx, sessionID)
+}
+
+// JoinRoom mocks base method.
+func (m *MockRoomManager) JoinRoom(ctx context.Context, roomID domain.RoomID, sessionID domain.SessionID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "JoinRoom", ctx, roomID, sessionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// JoinRoom indicates an expected call of JoinRoom.
+func (mr *MockRoomManagerMockRecorder) JoinRoom(ctx, roomID, sessionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "JoinRoom", reflect.TypeOf((*MockRoomManager)(nil).JoinRoom), ctx, roomID, sessionID)
+}
+
+// LeaveRoom mocks base method.
+func (m *MockRoomManager) LeaveRoom(ctx context.Context, roomID domain.RoomID, sessionID domain.SessionID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LeaveRoom", ctx, roomID, sessionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LeaveRoom indicates an expected call of LeaveRoom.
+func (mr *MockRoomManagerMockRecorder) LeaveRoom(ctx, roomID, sessionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LeaveRoom", reflect.TypeOf((*MockRoomManager)(nil).LeaveRoom), ctx, roomID, sessionID)
 }

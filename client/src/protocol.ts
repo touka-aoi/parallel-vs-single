@@ -10,6 +10,10 @@ export const DATA_TYPE_ACTOR = 2;
 export const DATA_TYPE_VOICE = 3;
 export const DATA_TYPE_CONTROL = 4;
 
+// Control SubType
+export const CONTROL_SUBTYPE_JOIN = 1;
+export const CONTROL_SUBTYPE_LEAVE = 2;
+
 // KeyMask
 export const KEY_W = 0x01;
 export const KEY_A = 0x02;
@@ -106,4 +110,29 @@ export function decodeHeader(data: ArrayBuffer): Header {
 export function getDataType(data: ArrayBuffer): number {
   const view = new DataView(data);
   return view.getUint8(HEADER_SIZE);
+}
+
+// Control メッセージをエンコード
+export function encodeControlMessage(sessionId: number, seq: number, subType: number): ArrayBuffer {
+  const payloadLength = PAYLOAD_HEADER_SIZE;
+  const totalLength = HEADER_SIZE + payloadLength;
+
+  const buf = new ArrayBuffer(totalLength);
+  const view = new DataView(buf);
+
+  // Header
+  const header: Header = {
+    version: 1,
+    sessionId,
+    seq,
+    length: payloadLength,
+    timestamp: Date.now() & 0xFFFFFFFF,
+  };
+  encodeHeader(view, 0, header);
+
+  // PayloadHeader
+  view.setUint8(HEADER_SIZE, DATA_TYPE_CONTROL);
+  view.setUint8(HEADER_SIZE + 1, subType);
+
+  return buf;
 }

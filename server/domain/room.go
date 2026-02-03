@@ -71,11 +71,6 @@ func (r *Room) Run(ctx context.Context) error {
 	msgCh := r.pubsub.Subscribe(roomTopic)
 	defer r.pubsub.Unsubscribe(roomTopic, msgCh)
 
-	// room制御用トピックを購読（join/leave）
-	ctrlTopic := Topic("room:" + string(r.ID) + ":ctrl")
-	ctrlCh := r.pubsub.Subscribe(ctrlTopic)
-	defer r.pubsub.Unsubscribe(ctrlTopic, ctrlCh)
-
 	ticker := time.NewTicker(r.tickInterval)
 	defer ticker.Stop()
 
@@ -84,16 +79,6 @@ func (r *Room) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			// 制御メッセージを処理（join/leave）
-		CTRL_LOOP:
-			for {
-				select {
-				case ctrl := <-ctrlCh:
-					r.handleControlMessage(ctrl)
-				default:
-					break CTRL_LOOP
-				}
-			}
 			// 受信メッセージを処理
 		RECEIVE_LOOP:
 			for {
@@ -124,18 +109,6 @@ func (r *Room) Run(ctx context.Context) error {
 				}
 			}
 		}
-	}
-}
-
-// handleControlMessage はjoin/leave制御メッセージを処理します。
-// TODO: []byte("join"/"leave")をRoomMessage型に置き換え
-func (r *Room) handleControlMessage(msg Message) {
-	switch string(msg.Data) {
-	case "join":
-		r.sessions[msg.SessionID] = struct{}{}
-	case "leave":
-		delete(r.sessions, msg.SessionID)
-	default:
 	}
 }
 

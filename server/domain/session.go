@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type SessionID uint64
+type SessionID uint32
 
 var sessionIDCounter atomic.Uint64
 

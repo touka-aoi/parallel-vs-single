@@ -12,6 +12,7 @@ var byteOrder = binary.LittleEndian
 const (
 	HeaderSize        = 13
 	PayloadHeaderSize = 2
+	JoinPayloadSize   = 16
 )
 
 // Header はメッセージヘッダー (13バイト)
@@ -116,8 +117,36 @@ func ParsePayloadHeader(data []byte) (*PayloadHeader, error) {
 func (p *PayloadHeader) Encode() []byte {
 	data := make([]byte, PayloadHeaderSize)
 	data[0] = byte(p.DataType)
-	data[1] = p.SubType
+	data[1] = byte(p.SubType)
 	return data
+}
+
+// JoinPayload はルーム参加メッセージのペイロード (16バイト)
+//
+//	roomID  [16]byte  - ルームID (UUID)
+type JoinPayload struct {
+	RoomID RoomID
+}
+
+var ErrInvalidJoinPayloadSize = errors.New("invalid join payload size")
+
+// ParseJoinPayload はバイト列からJoinPayloadをパースする
+func ParseJoinPayload(data []byte) (*JoinPayload, error) {
+	if len(data) < JoinPayloadSize {
+		return nil, ErrInvalidJoinPayloadSize
+	}
+
+	roomIDBytes := data[:JoinPayloadSize]
+	roomID := string(roomIDBytes)
+
+	return &JoinPayload{
+		RoomID: RoomID(roomID),
+	}, nil
+}
+
+// Encode はJoinPayloadをバイト列にエンコードする
+func (j *JoinPayload) Encode() []byte {
+	return []byte(j.RoomID)
 }
 
 // サイズ定数
@@ -131,8 +160,8 @@ const (
 //	x, y, z      float32 (12) - 位置
 //	qx, qy, qz, qw float32 (16) - quaternion
 type Position struct {
-	X, Y, Z          float32 // 位置
-	QX, QY, QZ, QW   float32 // quaternion
+	X, Y, Z        float32 // 位置
+	QX, QY, QZ, QW float32 // quaternion
 }
 
 // BoneData は1ボーンのデータ (17バイト)
@@ -170,7 +199,7 @@ type ActorSpawn struct {
 //	position Position - 位置・姿勢
 //	bones    []BoneData - ボーンデータ（可変長）
 type ActorUpdate struct {
-	Bitmask  [16]byte   // 変更ボーンのビットマスク (128ボーン対応)
+	Bitmask  [16]byte // 変更ボーンのビットマスク (128ボーン対応)
 	Position Position
 	Bones    []BoneData
 }

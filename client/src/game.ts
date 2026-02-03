@@ -2,8 +2,11 @@
 
 import type { Actor } from "./protocol";
 import {
+  CONTROL_SUBTYPE_JOIN,
+  CONTROL_SUBTYPE_LEAVE,
   DATA_TYPE_ACTOR,
   decodeActorBroadcast,
+  encodeControlMessage,
   encodeInputMessage,
   getDataType,
 } from "./protocol";
@@ -42,6 +45,9 @@ export class Game {
   private onConnect(): void {
     this.connected = true;
     console.log("Connected to server");
+    // Control/Join を送信
+    const joinMsg = encodeControlMessage(0, this.seq++, CONTROL_SUBTYPE_JOIN);
+    this.ws.send(joinMsg);
   }
 
   private onDisconnect(): void {
@@ -84,6 +90,12 @@ export class Game {
   }
 
   destroy(): void {
+    // Control/Leave を送信（ベストエフォート）
+    if (this.connected) {
+      const sessionId = this.mySessionId !== null ? Number(this.mySessionId) : 0;
+      const leaveMsg = encodeControlMessage(sessionId, this.seq++, CONTROL_SUBTYPE_LEAVE);
+      this.ws.send(leaveMsg);
+    }
     this.ws.disconnect();
     this.input.destroy();
   }

@@ -4,9 +4,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/coder/websocket"
 	"withered/server/adapter/websocket"
 	"withered/server/domain"
+
+	"github.com/coder/websocket"
 )
 
 type AcceptHandler struct {
@@ -27,8 +28,9 @@ func (h *AcceptHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "failed to accept", "err", err)
 		return
 	}
-	transport := adapterwebsocker.NewTransportFrom(conn)
+
 	session := domain.NewSession()
+	transport := adapterwebsocker.NewTransportFrom(conn)
 	connection := domain.NewConnection(session.ID(), transport)
 	endpoint, err := domain.NewSessionEndpoint(session, connection, h.pubsub, h.roomManager)
 	if err != nil {
