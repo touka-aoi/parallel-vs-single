@@ -88,6 +88,13 @@ func (se *SessionEndpoint) Run() error {
 		se.subscribeLoop(ctx, msgCh)
 		return nil
 	})
+
+	// セッションID通知を送信
+	assignMsg := EncodeAssignMessage(se.session.ID())
+	if err := se.Send(assignMsg); err != nil {
+		return err
+	}
+
 	if err := eg.Wait(); err != nil {
 		return err
 	}

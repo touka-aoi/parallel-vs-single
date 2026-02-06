@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"time"
 )
 
 // バイトオーダー: リトルエンディアン
@@ -53,12 +54,13 @@ const (
 type ControlSubType uint8
 
 const (
-	ControlSubTypeJoin  ControlSubType = 1
-	ControlSubTypeLeave ControlSubType = 2
-	ControlSubTypeKick  ControlSubType = 3
-	ControlSubTypePing  ControlSubType = 4
-	ControlSubTypePong  ControlSubType = 5
-	ControlSubTypeError ControlSubType = 6
+	ControlSubTypeJoin   ControlSubType = 1
+	ControlSubTypeLeave  ControlSubType = 2
+	ControlSubTypeKick   ControlSubType = 3
+	ControlSubTypePing   ControlSubType = 4
+	ControlSubTypePong   ControlSubType = 5
+	ControlSubTypeError  ControlSubType = 6
+	ControlSubTypeAssign ControlSubType = 7
 )
 
 // PayloadHeader はペイロードヘッダー (2バイト)
@@ -118,6 +120,27 @@ func (p *PayloadHeader) Encode() []byte {
 	data := make([]byte, PayloadHeaderSize)
 	data[0] = byte(p.DataType)
 	data[1] = byte(p.SubType)
+	return data
+}
+
+// EncodeAssignMessage はセッションID通知メッセージをエンコードする
+// クライアントに自分のセッションIDを通知するために使用
+func EncodeAssignMessage(sessionID SessionID) []byte {
+	header := Header{
+		Version:   1,
+		SessionID: uint32(sessionID),
+		Seq:       0,
+		Length:    PayloadHeaderSize,
+		Timestamp: uint32(time.Now().UnixMilli() & 0xFFFFFFFF),
+	}
+	payloadHeader := PayloadHeader{
+		DataType: DataTypeControl,
+		SubType:  uint8(ControlSubTypeAssign),
+	}
+
+	data := make([]byte, HeaderSize+PayloadHeaderSize)
+	copy(data[:HeaderSize], header.Encode())
+	copy(data[HeaderSize:], payloadHeader.Encode())
 	return data
 }
 
