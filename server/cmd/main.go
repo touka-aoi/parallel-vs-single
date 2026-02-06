@@ -27,8 +27,8 @@ func main() {
 	// PubSub初期化
 	pubsub := domain.NewSimplePubSub()
 
-	// デフォルトルーム設定
-	defaultRoomID := domain.RoomID("default")
+	// デフォルトルーム設定（固定のUUID: 00000000-0000-0000-0000-000000000001）
+	defaultRoomID := domain.RoomID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 	roomManager := domain.NewSimpleRoomManager(defaultRoomID)
 
 	// Roomを作成して起動

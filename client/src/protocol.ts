@@ -157,6 +157,44 @@ export function encodeControlMessage(sessionId: Uint8Array, seq: number, subType
   return buf;
 }
 
+// RoomIDサイズ
+export const ROOM_ID_SIZE = 16;
+
+// Join メッセージをエンコード（RoomID付き）
+// roomIdが省略またはnullの場合、ゼロ埋め16バイト（サーバーが自動割当）
+export function encodeJoinMessage(sessionId: Uint8Array, seq: number, roomId?: Uint8Array | null): ArrayBuffer {
+  const payloadLength = PAYLOAD_HEADER_SIZE + ROOM_ID_SIZE;
+  const totalLength = HEADER_SIZE + payloadLength;
+
+  const buf = new ArrayBuffer(totalLength);
+  const view = new DataView(buf);
+
+  // Header
+  const header: Header = {
+    version: 1,
+    sessionId,
+    seq,
+    length: payloadLength,
+    timestamp: Date.now() & 0xFFFFFFFF,
+  };
+  encodeHeader(view, 0, header);
+
+  // PayloadHeader
+  view.setUint8(HEADER_SIZE, DATA_TYPE_CONTROL);
+  view.setUint8(HEADER_SIZE + 1, CONTROL_SUBTYPE_JOIN);
+
+  // JoinPayload: RoomID (16バイト)
+  const roomIdOffset = HEADER_SIZE + PAYLOAD_HEADER_SIZE;
+  if (roomId && roomId.length >= ROOM_ID_SIZE) {
+    for (let i = 0; i < ROOM_ID_SIZE; i++) {
+      view.setUint8(roomIdOffset + i, roomId[i]);
+    }
+  }
+  // roomIdがnull/undefined、または長さが足りない場合は0埋め（ArrayBufferはデフォルトで0）
+
+  return buf;
+}
+
 // SessionIDを比較
 export function sessionIdEquals(a: Uint8Array | null, b: Uint8Array | null): boolean {
   if (a === null || b === null) return a === b;

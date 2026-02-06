@@ -3,11 +3,22 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 )
 
-type RoomID string
+type RoomID [16]byte
+
+// IsEmpty はRoomIDが空（ゼロ値）かどうかを判定します
+func (id RoomID) IsEmpty() bool {
+	return id == RoomID{}
+}
+
+// String はRoomIDを16進数文字列で返します（デバッグ用）
+func (id RoomID) String() string {
+	return fmt.Sprintf("%x", id[:])
+}
 
 var ErrRoomBusy = errors.New("room control channel is full")
 
@@ -67,7 +78,7 @@ func (r *Room) enqueueSend(ctx context.Context, msg roomSend) error {
 
 func (r *Room) Run(ctx context.Context) error {
 	// room宛のメッセージを購読
-	roomTopic := Topic("room:" + string(r.ID))
+	roomTopic := Topic("room:" + r.ID.String())
 	msgCh := r.pubsub.Subscribe(roomTopic)
 	defer r.pubsub.Unsubscribe(roomTopic, msgCh)
 

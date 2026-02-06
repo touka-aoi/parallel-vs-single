@@ -3,7 +3,6 @@
 import type { Actor } from "./protocol";
 import {
   CONTROL_SUBTYPE_ASSIGN,
-  CONTROL_SUBTYPE_JOIN,
   CONTROL_SUBTYPE_LEAVE,
   DATA_TYPE_ACTOR,
   DATA_TYPE_CONTROL,
@@ -11,6 +10,7 @@ import {
   decodeAssignMessage,
   encodeControlMessage,
   encodeInputMessage,
+  encodeJoinMessage,
   getControlSubType,
   getDataType,
   sessionIdToString,
@@ -70,10 +70,10 @@ export class Game {
         this.mySessionId = decodeAssignMessage(data);
         console.log("Received session ID:", sessionIdToString(this.mySessionId));
 
-        // Joinメッセージを送信
-        const joinMsg = encodeControlMessage(this.mySessionId, this.seq++, CONTROL_SUBTYPE_JOIN);
+        // Joinメッセージを送信（RoomID空=サーバー自動割当）
+        const joinMsg = encodeJoinMessage(this.mySessionId, this.seq++, null);
         this.ws.send(joinMsg);
-        console.log("Sent Join message");
+        console.log("Sent Join message (auto-assign room)");
       }
     } else if (dataType === DATA_TYPE_ACTOR) {
       this.actors = decodeActorBroadcast(data);
