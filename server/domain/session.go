@@ -17,14 +17,14 @@ func NewSessionID() SessionID {
 }
 
 // Bytes はSessionIDを16バイトのバイト列に変換する
-func (id SessionID) Bytes() ([16]byte, error) {
+// 前提: SessionIDは常にNewSessionID()で生成される内部型であり、
+// 外部からの入力で直接構築されない。そのためデコードエラーは発生しない。
+// 詳細はADR-007を参照。
+func (id SessionID) Bytes() [16]byte {
 	var b [16]byte
-	decoded, err := base64.RawURLEncoding.DecodeString(string(id))
-	if err != nil {
-		return b, err
-	}
+	decoded, _ := base64.RawURLEncoding.DecodeString(string(id))
 	copy(b[:], decoded)
-	return b, nil
+	return b
 }
 
 // SessionIDFromBytes はバイト列からSessionIDを生成する

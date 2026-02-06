@@ -209,7 +209,7 @@ func (se *SessionEndpoint) handleData(ctx context.Context, data []byte) {
 		slog.WarnContext(ctx, "failed to parse header", "err", err)
 		return
 	}
-	expectedBytes, _ := se.session.ID().Bytes()
+	expectedBytes := se.session.ID().Bytes()
 	if header.SessionID != expectedBytes {
 		slog.WarnContext(ctx, "session ID mismatch", "expected", se.session.ID(), "got", SessionIDFromBytes(header.SessionID))
 		return

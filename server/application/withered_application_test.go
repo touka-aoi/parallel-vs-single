@@ -13,7 +13,7 @@ func TestWitheredApplication_HandleMessage_Input(t *testing.T) {
 	sessionID := domain.NewSessionID()
 
 	// Inputメッセージを作成
-	sessionBytes, _ := sessionID.Bytes()
+	sessionBytes := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
 		SessionID: sessionBytes,
@@ -43,7 +43,7 @@ func TestWitheredApplication_HandleMessage_ActorSpawn(t *testing.T) {
 	ctx := context.Background()
 	sessionID := domain.NewSessionID()
 
-	sessionBytes, _ := sessionID.Bytes()
+	sessionBytes := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
 		SessionID: sessionBytes,
@@ -73,7 +73,7 @@ func TestWitheredApplication_HandleMessage_Control(t *testing.T) {
 	ctx := context.Background()
 	sessionID := domain.NewSessionID()
 
-	sessionBytes, _ := sessionID.Bytes()
+	sessionBytes := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
 		SessionID: sessionBytes,

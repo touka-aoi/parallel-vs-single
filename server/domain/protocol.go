@@ -131,7 +131,7 @@ func (p *PayloadHeader) Encode() []byte {
 func EncodeAssignMessage(sessionID SessionID) []byte {
 	header := Header{
 		Version:   1,
-		SessionID: uint32(sessionID),
+		SessionID: sessionID.Bytes(),
 		Seq:       0,
 		Length:    PayloadHeaderSize,
 		Timestamp: uint32(time.Now().UnixMilli() & 0xFFFFFFFF),

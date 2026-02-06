@@ -217,7 +217,7 @@ func encodeActorPositions(actors []*Actor) []byte {
 	// 各アクター
 	offset := 2
 	for _, actor := range actors {
-		bytes, _ := actor.SessionID.Bytes()
+		bytes := actor.SessionID.Bytes()
 		copy(buf[offset:offset+16], bytes[:])
 		byteOrder.PutUint32(buf[offset+16:offset+20], math.Float32bits(actor.Position.X))
 		byteOrder.PutUint32(buf[offset+20:offset+24], math.Float32bits(actor.Position.Y))
