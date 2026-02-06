@@ -1,18 +1,38 @@
 package domain
 
 import (
-	"fmt"
+	"crypto/rand"
+	"encoding/base64"
 	"sync/atomic"
 	"time"
 )
 
-type SessionID uint32
+type SessionID string
 
-var sessionIDCounter atomic.Uint64
-
-func (id SessionID) String() string {
-	return fmt.Sprintf("%d", id)
+// NewSessionID は暗号学的に安全なSessionIDを生成する
+func NewSessionID() SessionID {
+	var b [16]byte
+	rand.Read(b[:])
+	return SessionID(base64.RawURLEncoding.EncodeToString(b[:]))
 }
+
+// Bytes はSessionIDを16バイトのバイト列に変換する
+func (id SessionID) Bytes() ([16]byte, error) {
+	var b [16]byte
+	decoded, err := base64.RawURLEncoding.DecodeString(string(id))
+	if err != nil {
+		return b, err
+	}
+	copy(b[:], decoded)
+	return b, nil
+}
+
+// SessionIDFromBytes はバイト列からSessionIDを生成する
+func SessionIDFromBytes(b [16]byte) SessionID {
+	return SessionID(base64.RawURLEncoding.EncodeToString(b[:]))
+}
+
+func (id SessionID) String() string { return string(id) }
 
 // Session は1接続の論理的な接続状態を表す構造体です。
 type Session struct {
@@ -32,7 +52,7 @@ type Session struct {
 
 func NewSession() *Session {
 	s := &Session{
-		id: SessionID(sessionIDCounter.Add(1)),
+		id: NewSessionID(),
 	}
 	now := time.Now().UnixNano()
 	s.lastRead.Store(now)

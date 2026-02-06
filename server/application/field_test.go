@@ -23,10 +23,11 @@ func TestField_SpawnAtCenter(t *testing.T) {
 	m := NewMap(10, 10, 1.0) // WorldWidth=10, WorldHeight=10
 	f := NewField(m)
 
-	actor := f.SpawnAtCenter(domain.SessionID(1))
+	sessionID := domain.NewSessionID()
+	actor := f.SpawnAtCenter(sessionID)
 
-	if actor.SessionID != domain.SessionID(1) {
-		t.Errorf("SessionID = %d, want 1", actor.SessionID)
+	if actor.SessionID != sessionID {
+		t.Errorf("SessionID = %s, want %s", actor.SessionID, sessionID)
 	}
 	if actor.Position.X != 5.0 || actor.Position.Y != 5.0 {
 		t.Errorf("Position = (%f, %f), want (5, 5)", actor.Position.X, actor.Position.Y)
@@ -41,11 +42,12 @@ func TestField_Move(t *testing.T) {
 	f := NewField(m)
 	ctx := context.Background()
 
-	f.SpawnAtCenter(domain.SessionID(1)) // (5, 5)
+	sessionID := domain.NewSessionID()
+	f.SpawnAtCenter(sessionID) // (5, 5)
 
-	f.ActorMove(ctx, domain.SessionID(1), 2.0, -1.0)
+	f.ActorMove(ctx, sessionID, 2.0, -1.0)
 
-	actor, ok := f.GetActor(domain.SessionID(1))
+	actor, ok := f.GetActor(sessionID)
 	if !ok {
 		t.Fatal("actor not found")
 	}
@@ -59,7 +61,8 @@ func TestField_Move_Clamp(t *testing.T) {
 	f := NewField(m)
 	ctx := context.Background()
 
-	f.SpawnAtCenter(domain.SessionID(1)) // (5, 5)
+	sessionID := domain.NewSessionID()
+	f.SpawnAtCenter(sessionID) // (5, 5)
 
 	tests := []struct {
 		name      string
@@ -75,8 +78,8 @@ func TestField_Move_Clamp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f.ActorMove(ctx, domain.SessionID(1), tt.dx, tt.dy)
-			actor, _ := f.GetActor(domain.SessionID(1))
+			f.ActorMove(ctx, sessionID, tt.dx, tt.dy)
+			actor, _ := f.GetActor(sessionID)
 			if actor.Position.X != tt.expectedX || actor.Position.Y != tt.expectedY {
 				t.Errorf("Position = (%f, %f), want (%f, %f)",
 					actor.Position.X, actor.Position.Y, tt.expectedX, tt.expectedY)
@@ -91,29 +94,32 @@ func TestField_Move_ActorNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	// 存在しないアクターへのMoveはパニックしない（警告ログのみ）
-	f.ActorMove(ctx, domain.SessionID(999), 1.0, 1.0)
+	nonExistentID := domain.NewSessionID()
+	f.ActorMove(ctx, nonExistentID, 1.0, 1.0)
 }
 
 func TestField_Remove(t *testing.T) {
 	m := NewMap(10, 10, 1.0)
 	f := NewField(m)
 
-	f.SpawnAtCenter(domain.SessionID(1))
-	f.SpawnAtCenter(domain.SessionID(2))
+	sessionID1 := domain.NewSessionID()
+	sessionID2 := domain.NewSessionID()
+	f.SpawnAtCenter(sessionID1)
+	f.SpawnAtCenter(sessionID2)
 
 	if len(f.Actors) != 2 {
 		t.Fatalf("Actors length = %d, want 2", len(f.Actors))
 	}
 
-	f.Remove(domain.SessionID(1))
+	f.Remove(sessionID1)
 
 	if len(f.Actors) != 1 {
 		t.Errorf("Actors length = %d, want 1", len(f.Actors))
 	}
-	if _, ok := f.GetActor(domain.SessionID(1)); ok {
+	if _, ok := f.GetActor(sessionID1); ok {
 		t.Error("actor 1 should be removed")
 	}
-	if _, ok := f.GetActor(domain.SessionID(2)); !ok {
+	if _, ok := f.GetActor(sessionID2); !ok {
 		t.Error("actor 2 should exist")
 	}
 }
@@ -122,9 +128,9 @@ func TestField_GetAllActors(t *testing.T) {
 	m := NewMap(10, 10, 1.0)
 	f := NewField(m)
 
-	f.SpawnAtCenter(domain.SessionID(1))
-	f.SpawnAtCenter(domain.SessionID(2))
-	f.SpawnAtCenter(domain.SessionID(3))
+	f.SpawnAtCenter(domain.NewSessionID())
+	f.SpawnAtCenter(domain.NewSessionID())
+	f.SpawnAtCenter(domain.NewSessionID())
 
 	actors := f.GetAllActors()
 	if len(actors) != 3 {

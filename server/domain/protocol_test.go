@@ -8,7 +8,7 @@ import (
 func TestHeaderRoundTrip(t *testing.T) {
 	original := &Header{
 		Version:   1,
-		SessionID: 12345,
+		SessionID: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		Seq:       100,
 		Length:    256,
 		Timestamp: 1234567890,
