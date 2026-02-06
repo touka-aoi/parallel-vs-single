@@ -1,8 +1,9 @@
 // バイナリプロトコル定義
 
-export const HEADER_SIZE = 13;
+export const HEADER_SIZE = 25; // 1 + 16 + 2 + 2 + 4
 export const PAYLOAD_HEADER_SIZE = 2;
 export const INPUT_PAYLOAD_SIZE = 4;
+export const SESSION_ID_SIZE = 16;
 
 // DataType
 export const DATA_TYPE_INPUT = 1;
@@ -13,6 +14,7 @@ export const DATA_TYPE_CONTROL = 4;
 // Control SubType
 export const CONTROL_SUBTYPE_JOIN = 1;
 export const CONTROL_SUBTYPE_LEAVE = 2;
+export const CONTROL_SUBTYPE_ASSIGN = 7;
 
 // KeyMask
 export const KEY_W = 0x01;
@@ -22,29 +24,32 @@ export const KEY_D = 0x08;
 
 export interface Header {
   version: number;
-  sessionId: number;
+  sessionId: Uint8Array; // 16バイト
   seq: number;
   length: number;
   timestamp: number;
 }
 
 export interface Actor {
-  sessionId: bigint;
+  sessionId: Uint8Array; // 16バイト
   x: number;
   y: number;
 }
 
-// Header を DataView に書き込む (13 bytes)
+// Header を DataView に書き込む (25 bytes)
 export function encodeHeader(view: DataView, offset: number, header: Header): void {
   view.setUint8(offset, header.version);
-  view.setUint32(offset + 1, header.sessionId, true);
-  view.setUint16(offset + 5, header.seq, true);
-  view.setUint16(offset + 7, header.length, true);
-  view.setUint32(offset + 9, header.timestamp, true);
+  // sessionId: 16バイト
+  for (let i = 0; i < SESSION_ID_SIZE; i++) {
+    view.setUint8(offset + 1 + i, header.sessionId[i] || 0);
+  }
+  view.setUint16(offset + 17, header.seq, true);
+  view.setUint16(offset + 19, header.length, true);
+  view.setUint32(offset + 21, header.timestamp, true);
 }
 
 // Input メッセージをエンコード
-export function encodeInputMessage(sessionId: number, seq: number, keyMask: number): ArrayBuffer {
+export function encodeInputMessage(sessionId: Uint8Array, seq: number, keyMask: number): ArrayBuffer {
   const payloadLength = PAYLOAD_HEADER_SIZE + INPUT_PAYLOAD_SIZE;
   const totalLength = HEADER_SIZE + payloadLength;
 
@@ -72,8 +77,10 @@ export function encodeInputMessage(sessionId: number, seq: number, keyMask: numb
 }
 
 // Actor Broadcast をデコード
+// 各Actor: SessionID([16]byte) + X(f32) + Y(f32) = 24 bytes
 export function decodeActorBroadcast(data: ArrayBuffer): Actor[] {
   const view = new DataView(data);
+  const ACTOR_SIZE = 24; // 16 + 4 + 4
 
   // Header + PayloadHeader をスキップ
   const offset = HEADER_SIZE + PAYLOAD_HEADER_SIZE;
@@ -83,11 +90,11 @@ export function decodeActorBroadcast(data: ArrayBuffer): Actor[] {
 
   let pos = offset + 2;
   for (let i = 0; i < actorCount; i++) {
-    const sessionId = view.getBigUint64(pos, true);
-    const x = view.getFloat32(pos + 8, true);
-    const y = view.getFloat32(pos + 12, true);
-    actors.push({ sessionId, x, y });
-    pos += 16;
+    const sessionId = new Uint8Array(data, pos, SESSION_ID_SIZE);
+    const x = view.getFloat32(pos + 16, true);
+    const y = view.getFloat32(pos + 20, true);
+    actors.push({ sessionId: new Uint8Array(sessionId), x, y });
+    pos += ACTOR_SIZE;
   }
 
   return actors;
@@ -96,13 +103,14 @@ export function decodeActorBroadcast(data: ArrayBuffer): Actor[] {
 // Header をデコード
 export function decodeHeader(data: ArrayBuffer): Header {
   const view = new DataView(data);
+  const sessionId = new Uint8Array(data, 1, SESSION_ID_SIZE);
 
   return {
     version: view.getUint8(0),
-    sessionId: view.getUint32(1, true),
-    seq: view.getUint16(5, true),
-    length: view.getUint16(7, true),
-    timestamp: view.getUint32(9, true),
+    sessionId: new Uint8Array(sessionId),
+    seq: view.getUint16(17, true),
+    length: view.getUint16(19, true),
+    timestamp: view.getUint32(21, true),
   };
 }
 
@@ -112,8 +120,20 @@ export function getDataType(data: ArrayBuffer): number {
   return view.getUint8(HEADER_SIZE);
 }
 
+// Control SubType を取得
+export function getControlSubType(data: ArrayBuffer): number {
+  const view = new DataView(data);
+  return view.getUint8(HEADER_SIZE + 1);
+}
+
+// Assign メッセージからセッションIDをデコード
+export function decodeAssignMessage(data: ArrayBuffer): Uint8Array {
+  const header = decodeHeader(data);
+  return header.sessionId;
+}
+
 // Control メッセージをエンコード
-export function encodeControlMessage(sessionId: number, seq: number, subType: number): ArrayBuffer {
+export function encodeControlMessage(sessionId: Uint8Array, seq: number, subType: number): ArrayBuffer {
   const payloadLength = PAYLOAD_HEADER_SIZE;
   const totalLength = HEADER_SIZE + payloadLength;
 
@@ -135,4 +155,21 @@ export function encodeControlMessage(sessionId: number, seq: number, subType: nu
   view.setUint8(HEADER_SIZE + 1, subType);
 
   return buf;
+}
+
+// SessionIDを比較
+export function sessionIdEquals(a: Uint8Array | null, b: Uint8Array | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+// SessionIDを文字列に変換（デバッグ用）
+export function sessionIdToString(sessionId: Uint8Array): string {
+  return Array.from(sessionId)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }

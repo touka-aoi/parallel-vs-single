@@ -1,6 +1,7 @@
 // Canvas 描画
 
 import type { Actor } from "./protocol";
+import { sessionIdEquals } from "./protocol";
 
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
@@ -51,9 +52,9 @@ export class Renderer {
     }
   }
 
-  drawActors(actors: Actor[], mySessionId: bigint | null): void {
+  drawActors(actors: Actor[], mySessionId: Uint8Array | null): void {
     for (const actor of actors) {
-      const isMe = mySessionId !== null && actor.sessionId === mySessionId;
+      const isMe = sessionIdEquals(mySessionId, actor.sessionId);
       this.drawActor(actor.x, actor.y, isMe);
     }
   }
@@ -73,7 +74,7 @@ export class Renderer {
     this.ctx.stroke();
   }
 
-  render(actors: Actor[], mySessionId: bigint | null): void {
+  render(actors: Actor[], mySessionId: Uint8Array | null): void {
     this.clear();
     this.drawMap();
     this.drawActors(actors, mySessionId);

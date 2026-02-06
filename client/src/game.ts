@@ -2,13 +2,18 @@
 
 import type { Actor } from "./protocol";
 import {
+  CONTROL_SUBTYPE_ASSIGN,
   CONTROL_SUBTYPE_JOIN,
   CONTROL_SUBTYPE_LEAVE,
   DATA_TYPE_ACTOR,
+  DATA_TYPE_CONTROL,
   decodeActorBroadcast,
+  decodeAssignMessage,
   encodeControlMessage,
   encodeInputMessage,
+  getControlSubType,
   getDataType,
+  sessionIdToString,
 } from "./protocol";
 import { WebSocketClient } from "./websocket";
 import { InputManager } from "./input";
@@ -22,7 +27,7 @@ export class Game {
   private renderer: Renderer;
 
   private actors: Actor[] = [];
-  private mySessionId: bigint | null = null;
+  private mySessionId: Uint8Array | null = null;
   private seq: number = 0;
   private connected: boolean = false;
 
@@ -44,10 +49,8 @@ export class Game {
 
   private onConnect(): void {
     this.connected = true;
-    console.log("Connected to server");
-    // Control/Join を送信
-    const joinMsg = encodeControlMessage(0, this.seq++, CONTROL_SUBTYPE_JOIN);
-    this.ws.send(joinMsg);
+    console.log("Connected to server, waiting for session ID...");
+    // Assignメッセージを待つ（ここではJoinを送信しない）
   }
 
   private onDisconnect(): void {
@@ -60,25 +63,29 @@ export class Game {
   private onMessage(data: ArrayBuffer): void {
     const dataType = getDataType(data);
 
-    if (dataType === DATA_TYPE_ACTOR) {
-      this.actors = decodeActorBroadcast(data);
+    if (dataType === DATA_TYPE_CONTROL) {
+      const subType = getControlSubType(data);
+      if (subType === CONTROL_SUBTYPE_ASSIGN) {
+        // セッションID通知を受信
+        this.mySessionId = decodeAssignMessage(data);
+        console.log("Received session ID:", sessionIdToString(this.mySessionId));
 
-      // 最初のブロードキャストで自分のSessionIDを特定
-      // (最初に追加されたアクターが自分である可能性が高い)
-      if (this.mySessionId === null && this.actors.length > 0) {
-        this.mySessionId = this.actors[0].sessionId;
-        console.log("My SessionID:", this.mySessionId);
+        // Joinメッセージを送信
+        const joinMsg = encodeControlMessage(this.mySessionId, this.seq++, CONTROL_SUBTYPE_JOIN);
+        this.ws.send(joinMsg);
+        console.log("Sent Join message");
       }
+    } else if (dataType === DATA_TYPE_ACTOR) {
+      this.actors = decodeActorBroadcast(data);
     }
   }
 
   private gameLoop(): void {
     // 入力送信
-    if (this.connected) {
+    if (this.connected && this.mySessionId !== null) {
       const keyMask = this.input.getKeyMask();
       if (keyMask !== 0) {
-        const sessionId = this.mySessionId !== null ? Number(this.mySessionId) : 0;
-        const msg = encodeInputMessage(sessionId, this.seq++, keyMask);
+        const msg = encodeInputMessage(this.mySessionId, this.seq++, keyMask);
         this.ws.send(msg);
       }
     }
@@ -91,9 +98,8 @@ export class Game {
 
   destroy(): void {
     // Control/Leave を送信（ベストエフォート）
-    if (this.connected) {
-      const sessionId = this.mySessionId !== null ? Number(this.mySessionId) : 0;
-      const leaveMsg = encodeControlMessage(sessionId, this.seq++, CONTROL_SUBTYPE_LEAVE);
+    if (this.connected && this.mySessionId !== null) {
+      const leaveMsg = encodeControlMessage(this.mySessionId, this.seq++, CONTROL_SUBTYPE_LEAVE);
       this.ws.send(leaveMsg);
     }
     this.ws.disconnect();
