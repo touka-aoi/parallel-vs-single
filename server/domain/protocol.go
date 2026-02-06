@@ -10,21 +10,21 @@ import (
 var byteOrder = binary.LittleEndian
 
 const (
-	HeaderSize        = 13
+	HeaderSize        = 25
 	PayloadHeaderSize = 2
 	JoinPayloadSize   = 16
 )
 
-// Header はメッセージヘッダー (13バイト)
+// Header はメッセージヘッダー (25バイト)
 //
-//	version    u8   (1)
-//	sessionID  u32  (4)
-//	seq        u16  (2)
-//	length     u16  (2)  - ペイロード長
-//	timestamp  u32  (4)
+//	version    u8      (1)
+//	sessionID  [16]byte (16)
+//	seq        u16     (2)
+//	length     u16     (2)  - ペイロード長
+//	timestamp  u32     (4)
 type Header struct {
 	Version   uint8
-	SessionID uint32
+	SessionID [16]byte
 	Seq       uint16
 	Length    uint16
 	Timestamp uint32
@@ -81,12 +81,15 @@ func ParseHeader(data []byte) (*Header, error) {
 		return nil, ErrInvalidHeaderSize
 	}
 
+	var sessionID [16]byte
+	copy(sessionID[:], data[1:17])
+
 	return &Header{
 		Version:   data[0],
-		SessionID: byteOrder.Uint32(data[1:5]),
-		Seq:       byteOrder.Uint16(data[5:7]),
-		Length:    byteOrder.Uint16(data[7:9]),
-		Timestamp: byteOrder.Uint32(data[9:13]),
+		SessionID: sessionID,
+		Seq:       byteOrder.Uint16(data[17:19]),
+		Length:    byteOrder.Uint16(data[19:21]),
+		Timestamp: byteOrder.Uint32(data[21:25]),
 	}, nil
 }
 
@@ -94,10 +97,10 @@ func ParseHeader(data []byte) (*Header, error) {
 func (h *Header) Encode() []byte {
 	data := make([]byte, HeaderSize)
 	data[0] = h.Version
-	byteOrder.PutUint32(data[1:5], h.SessionID)
-	byteOrder.PutUint16(data[5:7], h.Seq)
-	byteOrder.PutUint16(data[7:9], h.Length)
-	byteOrder.PutUint32(data[9:13], h.Timestamp)
+	copy(data[1:17], h.SessionID[:])
+	byteOrder.PutUint16(data[17:19], h.Seq)
+	byteOrder.PutUint16(data[19:21], h.Length)
+	byteOrder.PutUint32(data[21:25], h.Timestamp)
 	return data
 }
 

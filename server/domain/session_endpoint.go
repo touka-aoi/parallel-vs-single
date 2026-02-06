@@ -202,8 +202,9 @@ func (se *SessionEndpoint) handleData(ctx context.Context, data []byte) {
 		slog.WarnContext(ctx, "failed to parse header", "err", err)
 		return
 	}
-	if header.SessionID != uint32(se.session.ID()) {
-		slog.WarnContext(ctx, "session ID mismatch", "expected", se.session.ID(), "got", header.SessionID)
+	expectedBytes, _ := se.session.ID().Bytes()
+	if header.SessionID != expectedBytes {
+		slog.WarnContext(ctx, "session ID mismatch", "expected", se.session.ID(), "got", SessionIDFromBytes(header.SessionID))
 		return
 	}
 	payloadHeader, err := ParsePayloadHeader(data[HeaderSize:])

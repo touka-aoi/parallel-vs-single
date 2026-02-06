@@ -10,12 +10,13 @@ import (
 func TestWitheredApplication_HandleMessage_Input(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID(1)
+	sessionID := domain.NewSessionID()
 
 	// Inputメッセージを作成
+	sessionBytes, _ := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
-		SessionID: 123,
+		SessionID: sessionBytes,
 		Seq:       1,
 		Length:    domain.PayloadHeaderSize + domain.InputPayloadSize,
 		Timestamp: 1000,
@@ -40,11 +41,12 @@ func TestWitheredApplication_HandleMessage_Input(t *testing.T) {
 func TestWitheredApplication_HandleMessage_ActorSpawn(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID(1)
+	sessionID := domain.NewSessionID()
 
+	sessionBytes, _ := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
-		SessionID: 123,
+		SessionID: sessionBytes,
 		Seq:       1,
 		Length:    domain.PayloadHeaderSize + domain.PositionSize,
 		Timestamp: 1000,
@@ -69,11 +71,12 @@ func TestWitheredApplication_HandleMessage_ActorSpawn(t *testing.T) {
 func TestWitheredApplication_HandleMessage_Control(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID(1)
+	sessionID := domain.NewSessionID()
 
+	sessionBytes, _ := sessionID.Bytes()
 	header := &domain.Header{
 		Version:   1,
-		SessionID: 123,
+		SessionID: sessionBytes,
 		Seq:       1,
 		Length:    domain.PayloadHeaderSize,
 		Timestamp: 1000,
@@ -94,7 +97,7 @@ func TestWitheredApplication_HandleMessage_Control(t *testing.T) {
 func TestWitheredApplication_HandleMessage_InvalidHeader(t *testing.T) {
 	app := NewWitheredApplication()
 	ctx := context.Background()
-	sessionID := domain.SessionID(1)
+	sessionID := domain.NewSessionID()
 
 	// 短すぎるデータ
 	data := []byte{0x01, 0x02}
