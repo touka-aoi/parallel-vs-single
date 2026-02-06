@@ -19,7 +19,7 @@ import { WebSocketClient } from "./websocket";
 import { InputManager } from "./input";
 import { Renderer } from "./renderer";
 
-const SERVER_URL = "ws://localhost:9090/ws";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "ws://localhost:9090/ws";
 
 export class Game {
   private ws: WebSocketClient;
