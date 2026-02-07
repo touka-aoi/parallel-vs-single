@@ -162,17 +162,17 @@ func ParseJoinPayload(data []byte) (*JoinPayload, error) {
 		return nil, ErrInvalidJoinPayloadSize
 	}
 
-	roomIDBytes := data[:JoinPayloadSize]
-	roomID := string(roomIDBytes)
+	var roomID RoomID
+	copy(roomID[:], data[:JoinPayloadSize])
 
 	return &JoinPayload{
-		RoomID: RoomID(roomID),
+		RoomID: roomID,
 	}, nil
 }
 
 // Encode はJoinPayloadをバイト列にエンコードする
 func (j *JoinPayload) Encode() []byte {
-	return []byte(j.RoomID)
+	return j.RoomID[:]
 }
 
 // サイズ定数

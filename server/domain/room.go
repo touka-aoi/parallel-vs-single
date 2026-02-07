@@ -3,11 +3,22 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 )
 
-type RoomID string
+type RoomID [16]byte
+
+// IsEmpty はRoomIDが空（ゼロ値）かどうかを判定します
+func (id RoomID) IsEmpty() bool {
+	return id == RoomID{}
+}
+
+// String はRoomIDを16進数文字列で返します
+func (id RoomID) String() string {
+	return fmt.Sprintf("%x", id[:])
+}
 
 var ErrRoomBusy = errors.New("room control channel is full")
 
@@ -67,7 +78,7 @@ func (r *Room) enqueueSend(ctx context.Context, msg roomSend) error {
 
 func (r *Room) Run(ctx context.Context) error {
 	// room宛のメッセージを購読
-	roomTopic := Topic("room:" + string(r.ID))
+	roomTopic := Topic("room:" + r.ID.String())
 	msgCh := r.pubsub.Subscribe(roomTopic)
 	defer r.pubsub.Unsubscribe(roomTopic, msgCh)
 
@@ -84,6 +95,8 @@ func (r *Room) Run(ctx context.Context) error {
 			for {
 				select {
 				case msg := <-msgCh:
+					// Roomの責務に関する処理
+					r.HandleMessage(ctx, msg)
 					// アプリケーションロジックが担当する
 					if err := r.application.HandleMessage(ctx, msg.SessionID, msg.Data); err != nil {
 						slog.WarnContext(ctx, "room handle message failed", "err", err)
@@ -109,6 +122,29 @@ func (r *Room) Run(ctx context.Context) error {
 				}
 			}
 		}
+	}
+}
+
+// HandleMessage はPubSub経由で受信したメッセージを処理し、
+// Control/JoinならsessionsにセッションIDを追加、Control/Leaveなら削除する。
+func (r *Room) HandleMessage(ctx context.Context, msg Message) {
+	if len(msg.Data) < HeaderSize+PayloadHeaderSize {
+		return
+	}
+	payloadHeader, err := ParsePayloadHeader(msg.Data[HeaderSize:])
+	if err != nil {
+		return
+	}
+	if payloadHeader.DataType != DataTypeControl {
+		return
+	}
+	switch ControlSubType(payloadHeader.SubType) {
+	case ControlSubTypeJoin:
+		r.sessions[msg.SessionID] = struct{}{}
+		slog.InfoContext(ctx, "room: session added", "roomID", r.ID, "sessionID", msg.SessionID)
+	case ControlSubTypeLeave:
+		delete(r.sessions, msg.SessionID)
+		slog.InfoContext(ctx, "room: session removed", "roomID", r.ID, "sessionID", msg.SessionID)
 	}
 }
 

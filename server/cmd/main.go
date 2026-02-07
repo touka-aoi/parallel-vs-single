@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,6 +19,9 @@ import (
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(logger)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -27,8 +31,8 @@ func main() {
 	// PubSub初期化
 	pubsub := domain.NewSimplePubSub()
 
-	// デフォルトルーム設定
-	defaultRoomID := domain.RoomID("default")
+	// デフォルトルーム設定（固定のUUID: 00000000-0000-0000-0000-000000000001）
+	defaultRoomID := domain.RoomID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
 	roomManager := domain.NewSimpleRoomManager(defaultRoomID)
 
 	// Roomを作成して起動

@@ -24,7 +24,7 @@ func (t *wsTransport) Read(ctx context.Context) ([]byte, error) {
 }
 
 func (t *wsTransport) Write(ctx context.Context, data []byte) error {
-	return t.conn.Write(ctx, websocket.MessageText, data)
+	return t.conn.Write(ctx, websocket.MessageBinary, data)
 }
 
 func (t *wsTransport) Close(code int32, reason string) error {
