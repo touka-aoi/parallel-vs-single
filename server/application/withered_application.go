@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log/slog"
 	"math"
+	"time"
 
 	"withered/server/domain"
 )
@@ -201,7 +202,29 @@ func (app *WitheredApplication) Tick(ctx context.Context) interface{} {
 		return nil
 	}
 
-	return encodeActorPositions(actors)
+	payload := encodeActorPositions(actors)
+	return encodeActorBroadcastMessage(payload)
+}
+
+// encodeActorBroadcastMessage はアクターデータにHeader+PayloadHeaderを付与して完全なプロトコルメッセージを構築します。
+func encodeActorBroadcastMessage(payload []byte) []byte {
+	header := domain.Header{
+		Version:   1,
+		SessionID: [16]byte{}, // サーバー発のブロードキャスト
+		Seq:       0,
+		Length:    uint16(domain.PayloadHeaderSize + len(payload)),
+		Timestamp: uint32(time.Now().UnixMilli() & 0xFFFFFFFF),
+	}
+	payloadHeader := domain.PayloadHeader{
+		DataType: domain.DataTypeActor,
+		SubType:  uint8(domain.ActorSubTypeUpdate),
+	}
+
+	data := make([]byte, domain.HeaderSize+domain.PayloadHeaderSize+len(payload))
+	copy(data[:domain.HeaderSize], header.Encode())
+	copy(data[domain.HeaderSize:domain.HeaderSize+domain.PayloadHeaderSize], payloadHeader.Encode())
+	copy(data[domain.HeaderSize+domain.PayloadHeaderSize:], payload)
+	return data
 }
 
 // encodeActorPositions は全アクターの位置をバイナリにエンコードします。

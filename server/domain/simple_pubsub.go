@@ -62,7 +62,6 @@ func (p *SimplePubSub) Publish(ctx context.Context, topic Topic, msg Message) {
 	p.mu.RLock()
 	subs := p.subscribers[topic]
 	p.mu.RUnlock()
-	slog.DebugContext(ctx, "pub/sub: publishing message", "topic", topic, "message", string(msg.Data))
 
 	for _, ch := range subs {
 		select {

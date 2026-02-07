@@ -6,6 +6,8 @@ import {
   CONTROL_SUBTYPE_LEAVE,
   DATA_TYPE_ACTOR,
   DATA_TYPE_CONTROL,
+  HEADER_SIZE,
+  PAYLOAD_HEADER_SIZE,
   decodeActorBroadcast,
   decodeAssignMessage,
   encodeControlMessage,
@@ -61,6 +63,11 @@ export class Game {
   }
 
   private onMessage(data: ArrayBuffer): void {
+    if (data.byteLength < HEADER_SIZE + PAYLOAD_HEADER_SIZE) {
+      console.error("Message too short:", data.byteLength, "bytes, need at least", HEADER_SIZE + PAYLOAD_HEADER_SIZE);
+      return;
+    }
+
     const dataType = getDataType(data);
 
     if (dataType === DATA_TYPE_CONTROL) {
@@ -76,7 +83,13 @@ export class Game {
         console.log("Sent Join message (auto-assign room)");
       }
     } else if (dataType === DATA_TYPE_ACTOR) {
-      this.actors = decodeActorBroadcast(data);
+      try {
+        this.actors = decodeActorBroadcast(data);
+      } catch (e) {
+        console.error("Failed to decode actor broadcast:", e, "byteLength:", data.byteLength);
+      }
+    } else {
+      console.warn("Unknown dataType:", dataType, "byteLength:", data.byteLength);
     }
   }
 

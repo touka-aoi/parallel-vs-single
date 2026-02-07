@@ -151,7 +151,6 @@ func (se *SessionEndpoint) readLoop(ctx context.Context) {
 				se.sendCtrlEvent(ctx, endpointEvent{kind: evReadError, err: err})
 				continue
 			}
-			slog.DebugContext(ctx, "readLoop: received data", "sessionID", se.session.ID(), "data", string(data))
 			se.handleData(ctx, data)
 		}
 	}
@@ -163,7 +162,6 @@ func (se *SessionEndpoint) writeLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case data := <-se.writeCh:
-			slog.DebugContext(ctx, "writeLoop: received data", "sessionID", se.session.ID(), "data", string(data))
 			err := se.connection.Write(ctx, data)
 			if err != nil {
 				se.sendCtrlEvent(ctx, endpointEvent{kind: evWriteError, err: err})
@@ -222,8 +220,10 @@ func (se *SessionEndpoint) handleData(ctx context.Context, data []byte) {
 
 	switch payloadHeader.DataType {
 	case DataTypeControl:
-		se.handleControlMessage(ctx, ControlSubType(payloadHeader.SubType), data[HeaderSize+PayloadHeaderSize:])
+		se.handleControlMessage(ctx, ControlSubType(payloadHeader.SubType), data)
+		return
 	default:
+		// データメッセージをroom topicに転送
 		if se.roomID.IsEmpty() {
 			slog.WarnContext(ctx, "received data message before joining a room", "sessionID", se.session.ID())
 			return
@@ -239,7 +239,7 @@ func (se *SessionEndpoint) handleData(ctx context.Context, data []byte) {
 func (se *SessionEndpoint) handleControlMessage(ctx context.Context, subType ControlSubType, data []byte) {
 	switch subType {
 	case ControlSubTypeJoin:
-		payload, err := ParseJoinPayload(data)
+		payload, err := ParseJoinPayload(data[HeaderSize+PayloadHeaderSize:])
 		if err != nil {
 			slog.WarnContext(ctx, "failed to parse join message", "err", err)
 			return
@@ -255,22 +255,21 @@ func (se *SessionEndpoint) handleControlMessage(ctx context.Context, subType Con
 			roomID = defaultRoomID
 			slog.DebugContext(ctx, "auto-assigned room", "sessionID", se.session.ID(), "roomID", roomID)
 		}
-		if err := se.roomManager.JoinRoom(ctx, roomID, se.session.ID()); err != nil {
-			slog.ErrorContext(ctx, "failed to join room", "err", err)
-			return
-		}
 		se.roomID = roomID
 		slog.InfoContext(ctx, "session joined room", "sessionID", se.session.ID(), "roomID", se.roomID)
+		// room topicにJoinメッセージをpublish（Room.HandleMessageでsessions追加）
+		roomTopic := Topic("room:" + se.roomID.String())
+		se.pubsub.Publish(ctx, roomTopic, Message{SessionID: se.session.ID(), Data: data})
 	case ControlSubTypeLeave:
 		if se.roomID.IsEmpty() {
 			slog.WarnContext(ctx, "session not in any room, cannot leave", "sessionID", se.session.ID())
 			return
 		}
-		if err := se.roomManager.LeaveRoom(ctx, se.roomID, se.session.ID()); err != nil {
-			slog.ErrorContext(ctx, "failed to leave room", "err", err)
-			return
-		}
+		// room topicにLeaveメッセージをpublish（Room.HandleMessageでsessions削除）
+		roomTopic := Topic("room:" + se.roomID.String())
+		se.pubsub.Publish(ctx, roomTopic, Message{SessionID: se.session.ID(), Data: data})
 		slog.InfoContext(ctx, "session left room", "sessionID", se.session.ID(), "roomID", se.roomID)
+		se.roomID = RoomID{}
 	}
 }
 
